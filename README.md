@@ -69,3 +69,9 @@ AGENTS.md                         Repository-specific engineering instructions
 ```
 
 See `docs/ROADMAP.md` before starting a new phase.
+
+## Validation documentation
+
+- [macOS CI validation](docs/CI_VALIDATION.md)
+- [Phase 1–4 consistency audit](docs/audits/PHASE_1_TO_4_CONSISTENCY_AUDIT.md)
+- [Phase 1–4 audit summary](docs/audits/PHASE_1_TO_4_AUDIT_SUMMARY.md)
