@@ -64,17 +64,21 @@ private final class Planner {
         calendar.timeZone = TimeZone(
             identifier: input.profile.timeZoneIdentifier
         ) ?? .current
-        self.calendar = calendar
-        horizonStart = calendar.startOfDay(for: input.currentTime)
-        horizonEnd = calendar.date(
+        let horizonStart = calendar.startOfDay(for: input.currentTime)
+        let horizonEnd = calendar.date(
             byAdding: .day,
             value: input.profile.planningPolicy.planningHorizonDays,
             to: horizonStart
         ) ?? horizonStart.addingTimeInterval(7 * 86_400)
-        dayStarts = (0..<input.profile.planningPolicy.planningHorizonDays)
+        let dayStarts = (0..<input.profile.planningPolicy.planningHorizonDays)
             .compactMap {
                 calendar.date(byAdding: .day, value: $0, to: horizonStart)
             }
+
+        self.calendar = calendar
+        self.horizonStart = horizonStart
+        self.horizonEnd = horizonEnd
+        self.dayStarts = dayStarts
     }
 
     func run() -> SchedulingResult {
