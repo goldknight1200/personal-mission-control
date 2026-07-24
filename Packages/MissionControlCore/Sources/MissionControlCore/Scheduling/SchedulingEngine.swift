@@ -676,21 +676,23 @@ private final class Planner {
                 )
             }
             if let recoveryWindow {
+                let recoveryStart = recoveryWindow.earliest ?? horizonStart
+                let recoveryEnd = recoveryWindow.latest ?? horizonEnd
                 let eligibleDays = dayStarts.filter { day in
-                    awakeEnd(for: day) > recoveryWindow.earliest
-                        && awakeStart(for: day) < recoveryWindow.latest
+                    awakeEnd(for: day) > recoveryStart
+                        && awakeStart(for: day) < recoveryEnd
                 }
                 candidates.append(
                     Candidate(
                         mission: mission,
                         routineID: nil,
-                        occurrenceKey: "workout.\(workout.id.rawValue.uuidString).recovery.\(timestampKey(recoveryWindow.earliest))",
+                        occurrenceKey: "workout.\(workout.id.rawValue.uuidString).recovery.\(timestampKey(recoveryStart))",
                         stage: 3,
                         preferredDayStarts: eligibleDays,
                         preferredStartMinute: workout.preferredStartMinute
                             ?? preferredMinute(for: mission),
-                        earliest: recoveryWindow.earliest,
-                        latest: recoveryWindow.latest,
+                        earliest: recoveryStart,
+                        latest: recoveryEnd,
                         existingBlock: nil,
                         repeatedMissCause: latestMissCause(for: mission)
                     )

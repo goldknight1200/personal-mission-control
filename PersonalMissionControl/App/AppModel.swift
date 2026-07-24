@@ -698,13 +698,14 @@ final class AppModel: ObservableObject {
         usesDurableStorage: Bool = true,
         commandInterpreter: any CommandInterpreting = LocalCommandParser(),
         scheduleReplanner: any ScheduleReplanning = ReplanningEngine(),
-        notificationService: any NotificationService = UnavailableNotificationService()
+        notificationService: (any NotificationService)? = nil
     ) {
         self.repository = repository
         self.usesDurableStorage = usesDurableStorage
         self.commandInterpreter = commandInterpreter
         self.scheduleReplanner = scheduleReplanner
-        self.notificationService = notificationService
+        self.notificationService =
+            notificationService ?? UnavailableNotificationService()
         commandApplicator = CommandMutationApplicator(replanner: scheduleReplanner)
         persistenceNotice = startupNotice
 
