@@ -117,7 +117,7 @@ private struct ProjectEditor: View {
                             displayedComponents: .date
                         )
                     }
-                    Text("The seeded two-week horizon is editable. Changing it does not trigger automatic scheduling in Phase 1.")
+                    Text("The seeded two-week horizon is editable. Saving a change regenerates the local seven-day plan.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

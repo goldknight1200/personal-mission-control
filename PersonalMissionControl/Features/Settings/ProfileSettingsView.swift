@@ -41,6 +41,41 @@ struct ProfileSettingsView: View {
                     in: 10...120,
                     step: 5
                 )
+                Stepper(
+                    "Generated grid: \(draft.planningPolicy.generatedGridMinutes) min",
+                    value: $draft.planningPolicy.generatedGridMinutes,
+                    in: 1...15
+                )
+            }
+
+            Section("Sleep targets") {
+                Stepper(
+                    "Target: \(draft.planningPolicy.sleepTargetMinutes / 60)h \(draft.planningPolicy.sleepTargetMinutes % 60)m",
+                    value: $draft.planningPolicy.sleepTargetMinutes,
+                    in: draft.planningPolicy.practicalSleepMinimumMinutes...600,
+                    step: 15
+                )
+                Stepper(
+                    "Practical minimum: \(draft.planningPolicy.practicalSleepMinimumMinutes / 60)h \(draft.planningPolicy.practicalSleepMinimumMinutes % 60)m",
+                    value: $draft.planningPolicy.practicalSleepMinimumMinutes,
+                    in: draft.planningPolicy.reconsiderDemandingWorkBelowMinutes...draft.planningPolicy.sleepTargetMinutes,
+                    step: 15
+                )
+                Stepper(
+                    "Reconsider demanding work below: \(draft.planningPolicy.reconsiderDemandingWorkBelowMinutes / 60)h \(draft.planningPolicy.reconsiderDemandingWorkBelowMinutes % 60)m",
+                    value: $draft.planningPolicy.reconsiderDemandingWorkBelowMinutes,
+                    in: 240...draft.planningPolicy.practicalSleepMinimumMinutes,
+                    step: 15
+                )
+                Stepper(
+                    "Preferred wake: \(MissionControlFormatters.minuteOfDay(draft.planningPolicy.preferredWakeMinute))",
+                    value: $draft.planningPolicy.preferredWakeMinute,
+                    in: 4 * 60...12 * 60,
+                    step: 15
+                )
+                Text("These are editable planning defaults: 7.5-hour target, 6.5-hour practical minimum, and a six-hour context threshold.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Typical work pattern") {
@@ -117,6 +152,17 @@ struct ProfileSettingsView: View {
                     value: $draft.nutritionTargets.substantialMeals,
                     in: 1...8
                 )
+                ForEach(
+                    draft.nutritionTargets.preferredMealStartMinutes.indices,
+                    id: \.self
+                ) { index in
+                    Stepper(
+                        "Meal \(index + 1): \(MissionControlFormatters.minuteOfDay(draft.nutritionTargets.preferredMealStartMinutes[index]))",
+                        value: $draft.nutritionTargets.preferredMealStartMinutes[index],
+                        in: 0...23 * 60 + 55,
+                        step: 5
+                    )
+                }
                 Text("Targets are practical estimates, not an exact tracking requirement.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

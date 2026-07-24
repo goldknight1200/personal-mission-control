@@ -20,6 +20,15 @@
 		A1000000000000000000000B /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* SharedViews.swift */; };
 		A1000000000000000000000C /* SwiftDataMissionControlRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* SwiftDataMissionControlRepositoryTests.swift */; };
 		A1000000000000000000000D /* MissionControlCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000003 /* MissionControlCore */; };
+		C10000000000000000000001 /* AppleSpeechTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* AppleSpeechTranscriptionService.swift */; };
+		C10000000000000000000002 /* VoiceCaptureViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* VoiceCaptureViewModel.swift */; };
+		C10000000000000000000003 /* VoiceCommandFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* VoiceCommandFlowView.swift */; };
+		C10000000000000000000004 /* VoiceCommandFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000004 /* VoiceCommandFlowTests.swift */; };
+		D10000000000000000000001 /* AppleNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* AppleNotificationService.swift */; };
+		D10000000000000000000002 /* ExecutionPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* ExecutionPromptView.swift */; };
+		D10000000000000000000003 /* HistoryConsistencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* HistoryConsistencyView.swift */; };
+		D10000000000000000000004 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* NotificationSettingsView.swift */; };
+		D10000000000000000000005 /* ExecutionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000005 /* ExecutionFlowTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +55,15 @@
 		A2000000000000000000000B /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* SwiftDataMissionControlRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataMissionControlRepositoryTests.swift; sourceTree = "<group>"; };
 		A2000000000000000000000D /* PersonalMissionControlTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PersonalMissionControlTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C20000000000000000000001 /* AppleSpeechTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechTranscriptionService.swift; sourceTree = "<group>"; };
+		C20000000000000000000002 /* VoiceCaptureViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCaptureViewModel.swift; sourceTree = "<group>"; };
+		C20000000000000000000003 /* VoiceCommandFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCommandFlowView.swift; sourceTree = "<group>"; };
+		C20000000000000000000004 /* VoiceCommandFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCommandFlowTests.swift; sourceTree = "<group>"; };
+		D20000000000000000000001 /* AppleNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleNotificationService.swift; sourceTree = "<group>"; };
+		D20000000000000000000002 /* ExecutionPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionPromptView.swift; sourceTree = "<group>"; };
+		D20000000000000000000003 /* HistoryConsistencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryConsistencyView.swift; sourceTree = "<group>"; };
+		D20000000000000000000004 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
+		D20000000000000000000005 /* ExecutionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionFlowTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,6 +102,8 @@
 				A40000000000000000000005 /* Persistence */,
 				A40000000000000000000006 /* Features */,
 				A4000000000000000000000C /* UI */,
+				C40000000000000000000002 /* Voice */,
+				D40000000000000000000001 /* Notifications */,
 			);
 			path = PersonalMissionControl;
 			sourceTree = "<group>";
@@ -123,6 +143,10 @@
 				A40000000000000000000009 /* Lists */,
 				A4000000000000000000000A /* Plan */,
 				A4000000000000000000000B /* Settings */,
+				C40000000000000000000001 /* Voice */,
+				D40000000000000000000002 /* Execution */,
+				D40000000000000000000003 /* History */,
+				D40000000000000000000004 /* Notifications */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -179,8 +203,59 @@
 			isa = PBXGroup;
 			children = (
 				A2000000000000000000000C /* SwiftDataMissionControlRepositoryTests.swift */,
+				C20000000000000000000004 /* VoiceCommandFlowTests.swift */,
+				D20000000000000000000005 /* ExecutionFlowTests.swift */,
 			);
 			path = PersonalMissionControlTests;
+			sourceTree = "<group>";
+		};
+		C40000000000000000000001 /* Voice */ = {
+			isa = PBXGroup;
+			children = (
+				C20000000000000000000003 /* VoiceCommandFlowView.swift */,
+			);
+			path = Voice;
+			sourceTree = "<group>";
+		};
+		C40000000000000000000002 /* Voice */ = {
+			isa = PBXGroup;
+			children = (
+				C20000000000000000000001 /* AppleSpeechTranscriptionService.swift */,
+				C20000000000000000000002 /* VoiceCaptureViewModel.swift */,
+			);
+			path = Voice;
+			sourceTree = "<group>";
+		};
+		D40000000000000000000001 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				D20000000000000000000001 /* AppleNotificationService.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
+		D40000000000000000000002 /* Execution */ = {
+			isa = PBXGroup;
+			children = (
+				D20000000000000000000002 /* ExecutionPromptView.swift */,
+			);
+			path = Execution;
+			sourceTree = "<group>";
+		};
+		D40000000000000000000003 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				D20000000000000000000003 /* HistoryConsistencyView.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		D40000000000000000000004 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				D20000000000000000000004 /* NotificationSettingsView.swift */,
+			);
+			path = Notifications;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -300,6 +375,13 @@
 				A10000000000000000000009 /* PlanView.swift in Sources */,
 				A1000000000000000000000A /* ProfileSettingsView.swift in Sources */,
 				A1000000000000000000000B /* SharedViews.swift in Sources */,
+				C10000000000000000000001 /* AppleSpeechTranscriptionService.swift in Sources */,
+				C10000000000000000000002 /* VoiceCaptureViewModel.swift in Sources */,
+				C10000000000000000000003 /* VoiceCommandFlowView.swift in Sources */,
+				D10000000000000000000001 /* AppleNotificationService.swift in Sources */,
+				D10000000000000000000002 /* ExecutionPromptView.swift in Sources */,
+				D10000000000000000000003 /* HistoryConsistencyView.swift in Sources */,
+				D10000000000000000000004 /* NotificationSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -308,6 +390,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000000000000000000000C /* SwiftDataMissionControlRepositoryTests.swift in Sources */,
+				C10000000000000000000004 /* VoiceCommandFlowTests.swift in Sources */,
+				D10000000000000000000005 /* ExecutionFlowTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,6 +450,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hold the microphone button to record a voice command for local review.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribe voice commands so you can review and confirm schedule changes.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -388,6 +474,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hold the microphone button to record a voice command for local review.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribe voice commands so you can review and confirm schedule changes.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

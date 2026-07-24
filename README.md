@@ -4,15 +4,25 @@ Personal Mission Control is a native iPhone app intended to turn goals, obligati
 
 ## Status
 
-Phase 1 local vertical slice is implemented:
+Phases 1 through 4 are implemented in source:
 
-- framework-independent domain models, editable personal defaults, repository protocols, and deterministic timeline-selection helpers in the local core package;
+- framework-independent domain models, editable personal defaults, repository protocols, and a staged deterministic planner/replanner in the local core package;
 - schema-versioned local SwiftData persistence with an in-memory fallback;
-- a persistent seed schedule, completion/checklist interactions, and editable profile/category accents;
-- Home, Goals, Lists, and Plan navigation with a central Phase 3 microphone placeholder and right-side settings menu;
-- XCTest coverage for core models, seed data, repository round trips, timeline selection/progress, and the SwiftData adapter.
+- structured local seed inputs, a persisted seven-day generated plan, completion/checklist interactions, and editable profile/category accents;
+- exact fixed commitments, protected sleep and meals, real preparation/travel/recovery time, routine due windows, project minimum blocks, recovery restrictions, and preserved free time;
+- stable `SchedulingDecision` explanations, explicit conflict records, and minimal-change same-day replanning that freezes history and in-progress work;
+- Home, Goals, Lists, and Plan navigation with a press-and-hold central microphone and right-side settings menu;
+- editable transcript review with explicit Send, Edit, Retry, and Cancel actions;
+- a deterministic local interpreter, typed mutation/confirmation contract, atomic persistence, and structured replanning requests applied by the local engine;
+- on-device Apple Speech recognition when available, system speech fallback otherwise, and typed-entry fallback for denied or unavailable speech;
+- actionable local mission notifications with deterministic pre-start, start, late-15, and late-30 reconciliation;
+- explicit Already Started, Start Now, Replan, and consequential Skip recovery flows;
+- lightweight morning and passive evening surfaces, persisted planned-versus-actual history, repeated-miss diagnosis, and weekly consistency summaries;
+- XCTest coverage for planning/replanning constraints, command fixtures, mutation application, confirmation gates, notification recalculation, lateness boundaries, execution history, weekly aggregation, capture state, persistence failures, core models, and the SwiftData adapter.
 
-The full scheduling/replanning engine, voice capture, notifications, and permission-backed Apple integrations intentionally remain in later phases. SwiftData is the only Apple-framework adapter introduced in Phase 1; no account or network is required.
+EventKit, HealthKit, App Intents, AI providers, and later-phase management
+surfaces remain future work. No account, AI provider, or app-owned raw-audio
+file is required.
 
 ## Requirements
 
@@ -38,7 +48,10 @@ Build the app shell on a macOS Xcode host:
 xcodebuild -project PersonalMissionControl.xcodeproj -scheme PersonalMissionControl -destination 'generic/platform=iOS Simulator' build
 ```
 
-Permission-backed capabilities and device integrations are not configured in Phase 1. Normal local app signing still requires a macOS/Xcode development environment.
+Speech, microphone, and local-notification permission paths are configured.
+Live capture and notification action behavior still require an iOS
+simulator/device on a macOS Xcode host; normal local app signing requires the
+same environment.
 
 ## Repository map
 
@@ -47,8 +60,10 @@ PersonalMissionControl.xcodeproj/  Native iOS app project
 PersonalMissionControl/App/       SwiftUI composition root and app state
 PersonalMissionControl/Features/  Home, Goals, Lists, Plan, and settings UI
 PersonalMissionControl/Persistence/ SwiftData repository adapter
+PersonalMissionControl/Voice/     Apple Speech adapter and capture state
+PersonalMissionControl/Notifications/ UserNotifications adapter
 PersonalMissionControlTests/      App-adapter round-trip tests
-Packages/MissionControlCore/      Pure-Swift domain/scheduling package and tests
+Packages/MissionControlCore/      Pure-Swift domain/execution package and tests
 docs/                             Product, architecture, and phased roadmap contracts
 AGENTS.md                         Repository-specific engineering instructions
 ```

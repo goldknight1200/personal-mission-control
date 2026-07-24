@@ -20,6 +20,9 @@ Acceptance criteria:
 
 ## Phase 2 — Deterministic scheduling and replanning
 
+Implementation status: complete in source as of 2026-07-24; macOS/Xcode build,
+simulator, and physical-device validation remain pending.
+
 Implement the seven-day staged planner, detailed current-day timeline, explainable decisions, conflict reporting, and minimal-change replanning.
 
 Acceptance criteria:
@@ -33,6 +36,11 @@ Acceptance criteria:
 
 ## Phase 3 — Voice review and command pipeline
 
+Implementation status: complete in source as of 2026-07-24; macOS/Xcode,
+simulator microphone, and physical-device speech validation remain pending.
+Schedule-affecting commands feed confirmed typed requests to the deterministic
+Phase 2 replanner.
+
 Add press-and-hold recording, release-to-stop, transcription availability handling, editable review, and typed command proposals.
 
 Acceptance criteria:
@@ -45,6 +53,11 @@ Acceptance criteria:
 - No raw calendar or HealthKit dataset is sent to a provider.
 
 ## Phase 4 — Notifications, recovery, history, and consistency
+
+Implementation status: complete in source as of 2026-07-24; macOS/Xcode,
+simulator notification-action, and physical-device validation remain pending.
+Recovery operations use the deterministic Phase 2 replanner after explicit
+decisions.
 
 Implement actionable local notifications, missed-start recovery, daily check-ins, completion history, and weekly adherence summaries.
 

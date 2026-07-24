@@ -4,25 +4,24 @@ import SwiftUI
 
 struct MissionControlTabBar: View {
     @Binding var selection: AppTab
-    let microphoneAction: () -> Void
+    let isRecording: Bool
+    let microphonePressed: () -> Void
+    let microphoneReleased: () -> Void
+    let microphoneFallback: () -> Void
 
     var body: some View {
         HStack(spacing: 4) {
             tabButton(.home)
             tabButton(.goals)
 
-            Button(action: microphoneAction) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 25, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 62, height: 62)
-                    .background(Circle().fill(Color.accentColor))
-                    .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 6)
-            }
+            MicrophoneCaptureButton(
+                isRecording: isRecording,
+                pressBegan: microphonePressed,
+                pressEnded: microphoneReleased,
+                accessibilityAction: microphoneFallback
+            )
             .frame(maxWidth: .infinity)
             .offset(y: -13)
-            .accessibilityLabel("Microphone")
-            .accessibilityHint("Voice capture arrives in Phase 3")
 
             tabButton(.lists)
             tabButton(.plan)
@@ -50,6 +49,66 @@ struct MissionControlTabBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selection == tab ? .isSelected : [])
+    }
+}
+
+private struct MicrophoneCaptureButton: View {
+    let isRecording: Bool
+    let pressBegan: () -> Void
+    let pressEnded: () -> Void
+    let accessibilityAction: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        ZStack {
+            if isRecording {
+                Circle()
+                    .fill(Color.red.opacity(0.16))
+                    .frame(width: 76, height: 76)
+            }
+
+            Image(systemName: isRecording ? "waveform" : "mic.fill")
+                .font(.system(size: 25, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 62, height: 62)
+                .background(
+                    Circle().fill(isRecording ? Color.red : Color.accentColor)
+                )
+                .scaleEffect(isPressed ? 0.94 : 1)
+                .shadow(
+                    color: (isRecording ? Color.red : Color.accentColor).opacity(0.28),
+                    radius: 12,
+                    y: 6
+                )
+        }
+        .contentShape(Circle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isPressed else { return }
+                    isPressed = true
+                    pressBegan()
+                }
+                .onEnded { _ in
+                    guard isPressed else { return }
+                    isPressed = false
+                    pressEnded()
+                }
+        )
+        .animation(.easeOut(duration: 0.16), value: isPressed)
+        .animation(.easeInOut(duration: 0.2), value: isRecording)
+        .accessibilityElement()
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(
+            Text(isRecording ? "Recording voice command" : "Voice command")
+        )
+        .accessibilityHint(
+            "Press and hold to record, then release to review. Activate to type instead."
+        )
+        .accessibilityAction {
+            accessibilityAction()
+        }
     }
 }
 
@@ -104,7 +163,7 @@ struct SideMenu: View {
                 .padding(.vertical, 10)
             }
 
-            Text("Phase 1 · On-device data")
+            Text("Phase 4 · Active execution")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .padding(22)
@@ -128,31 +187,6 @@ struct ScreenMenuButton: View {
     }
 }
 
-struct VoicePlaceholderView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "mic.slash")
-                .font(.system(size: 42, weight: .medium))
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-
-            Text("Voice capture arrives in Phase 3")
-                .font(.title2.weight(.semibold))
-                .multilineTextAlignment(.center)
-
-            Text("This control is visual only for now. No recording, transcription, or command processing has started.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            Button("Close") { dismiss() }
-                .buttonStyle(.borderedProminent)
-        }
-        .padding(28)
-    }
-}
-
 struct MenuPlaceholderView: View {
     let destination: MenuDestination
 
@@ -172,13 +206,13 @@ struct MenuPlaceholderView: View {
         case .training:
             "Approved training program management arrives in Phase 7."
         case .history:
-            "Completion history and consistency summaries arrive in Phase 4."
+            ""
         case .calendar:
-            "Calendar access is not requested in Phase 1. Integration arrives in Phase 8."
+            "Calendar access is not connected yet. Integration arrives in Phase 8."
         case .health:
-            "Health access is not requested in Phase 1. Integration arrives in Phase 8."
+            "Health access is not connected yet. Integration arrives in Phase 8."
         case .notifications:
-            "Actionable local notifications arrive in Phase 4."
+            ""
         case .aiBehavior:
             "No AI provider is used. Optional interpretation arrives in Phase 9."
         case .appSettings:

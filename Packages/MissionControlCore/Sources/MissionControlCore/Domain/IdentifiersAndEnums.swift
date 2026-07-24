@@ -118,6 +118,7 @@ public enum MissionStatus: String, Codable, Sendable {
     case inProgress
     case completed
     case skipped
+    case partial
 }
 
 public enum ScheduleBlockKind: String, Codable, Sendable {
@@ -125,6 +126,7 @@ public enum ScheduleBlockKind: String, Codable, Sendable {
     case preparation
     case travel
     case meal
+    case sleep
     case fixedCommitment
     case freeTime
 

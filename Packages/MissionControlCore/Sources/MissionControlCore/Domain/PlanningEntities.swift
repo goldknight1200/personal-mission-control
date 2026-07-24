@@ -222,6 +222,7 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
     public var location: String?
     public var externalIdentifier: String?
     public var isExternallyManaged: Bool
+    public var isFootballMatch: Bool
 
     public init(
         id: EntityID = EntityID(),
@@ -231,7 +232,8 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
         end: Date,
         location: String? = nil,
         externalIdentifier: String? = nil,
-        isExternallyManaged: Bool = false
+        isExternallyManaged: Bool = false,
+        isFootballMatch: Bool = false
     ) {
         precondition(end > start)
         self.id = id
@@ -242,6 +244,60 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
         self.location = location
         self.externalIdentifier = externalIdentifier
         self.isExternallyManaged = isExternallyManaged
+        self.isFootballMatch = isFootballMatch
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case category
+        case start
+        case end
+        case location
+        case externalIdentifier
+        case isExternallyManaged
+        case isFootballMatch
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(EntityID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        category = try container.decode(MissionCategory.self, forKey: .category)
+        start = try container.decode(Date.self, forKey: .start)
+        end = try container.decode(Date.self, forKey: .end)
+        location = try container.decodeIfPresent(String.self, forKey: .location)
+        externalIdentifier = try container.decodeIfPresent(
+            String.self,
+            forKey: .externalIdentifier
+        )
+        isExternallyManaged = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .isExternallyManaged
+        ) ?? false
+        isFootballMatch = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .isFootballMatch
+        ) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(category, forKey: .category)
+        try container.encode(start, forKey: .start)
+        try container.encode(end, forKey: .end)
+        try container.encodeIfPresent(location, forKey: .location)
+        try container.encodeIfPresent(
+            externalIdentifier,
+            forKey: .externalIdentifier
+        )
+        try container.encode(
+            isExternallyManaged,
+            forKey: .isExternallyManaged
+        )
+        try container.encode(isFootballMatch, forKey: .isFootballMatch)
     }
 }
 

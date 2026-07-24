@@ -2,7 +2,11 @@
 
 ## Status and target
 
-Phase 1 implements the first local vertical slice while preserving the Phase 0 boundaries. It does not implement the scheduling/replanning engine or permission-backed Apple integrations.
+The current source implements Phases 1 through 4 while preserving the Phase 0
+boundaries. Phase 2 provides a deterministic seven-day `SchedulingEngine` and
+same-day `ReplanningEngine`; schedule-affecting structured commands and
+execution actions use that engine through `ScheduleReplanning`. Speech and
+local notifications remain permission-backed Apple adapters.
 
 - UI platform: native SwiftUI iPhone app.
 - Provisional minimum deployment target: iOS 17.0, chosen to keep the Phase 1 SwiftData adapter straightforward.
@@ -24,22 +28,23 @@ MissionControlCore (local pure-Swift package)
   integration protocols, structured mutations, decision explanations
        ^
        |
-Adapters (introduced by later phases in the app project)
+Adapters (owned by the app project and introduced by their feature phase)
   SwiftData | EventKit | HealthKit | Speech | UserNotifications
   AppIntents | iCal | secure storage | optional AI/OCR
 ```
 
 `MissionControlCore` may use the Swift standard library and carefully selected Foundation value types. It must not import UI, persistence, health, calendar, speech, notification, intent, or network frameworks. The app target owns concrete adapters and dependency composition.
 
-Expected later package organization:
+Current package organization:
 
 ```text
 Sources/MissionControlCore/
   Domain/          Entities, value types, identifiers, recurrence, time windows
   Scheduling/      Constraint stages, placement, replanning, explanations
   Commands/        Confirmed transcripts, intents, proposed mutations
-  UseCases/        Application operations expressed through protocols
+  Execution/       Deterministic execution, history, and notification policies
   Ports/           Repository and platform service protocols
+  Seed/            Editable local baseline inputs
 ```
 
 Feature UI remains grouped by user outcome in the app target, for example Home, Goals, Lists, Plan, VoiceReview, Workout, and Settings.
@@ -86,8 +91,8 @@ Protocol names may evolve during implementation, but responsibilities must remai
 - `DomainRepository`: focused repositories for missions, goals/projects, routines, completions, nutrition, inventory, workouts, and recovery.
 - `CalendarProviding`: permission-aware fixed/external event snapshots and later write-back metadata.
 - `HealthContextProviding`: a minimal, permission-aware recovery snapshot rather than raw HealthKit history.
-- `SpeechTranscribing`: ephemeral recording-to-transcript behavior with availability and cancellation.
-- `NotificationScheduling`: local actionable notification requests and reconciliation.
+- `SpeechTranscriptionService`: ephemeral recording-to-transcript behavior with availability and cancellation.
+- `NotificationService`: permission-aware actionable local notification requests, response routing, and reconciliation.
 - `CommandInterpreting`: confirmed text to proposed structured mutations; no write authority.
 - `SecretStoring`: Keychain-backed credentials for optional providers.
 - `Clock`, `CalendarProvidingContext`, and `IdentifierGenerating`: deterministic test seams.
@@ -111,6 +116,42 @@ Replanning accepts an immutable snapshot of completed/in-progress history plus t
 
 The engine is synchronous and side-effect free at its core. Repositories, framework APIs, and long-running interpretation run outside it. This makes the same input snapshot produce the same plan and explanations.
 
+Execution state is occurrence-aware. A reusable mission, such as an approved
+workout template, may own several schedule blocks, so starts, completions,
+lateness, and notifications use `scheduleBlockID` as the occurrence identity.
+The mission identifier continues to identify the reusable work definition.
+Schema-4 start records without a block identifier remain readable and use a
+deterministic nearest-block fallback during replanning.
+
+### Phase 2 operational assumptions and explicit conflicts
+
+- The product contract specifies sleep targets but not an authoritative
+  bedtime. The seed therefore derives sleep from an editable 07:30 preferred
+  wake time and a 7.5-hour target. Both are configuration, not inferred facts.
+- Exact fixed and externally managed events are never snapped or moved. If two
+  overlap, both remain exact and a blocking `fixedOverlap` conflict is emitted.
+- Preparation, travel, and shower/change ranges use their configured maximum
+  during planning so the plan does not rely on the optimistic edge of a range.
+- The five-minute shopping travel seed is treated as each leg around a
+  groceries mission, matching the other round-trip transition defaults. It
+  remains editable and is not treated as measured travel time.
+- A fixed football event only activates the 24-hour heavy lower-body
+  restriction when `isFootballMatch` is explicitly set; category alone is not
+  treated as proof of a match.
+- The current routine model has no calendar-day or last-completed anchor for
+  monthly recurrence. The engine deterministically uses the first horizon day
+  and emits `recurrenceAnchorMissing` instead of silently guessing.
+- Multi-day daily cadences use a fixed local-calendar epoch so a rolling
+  seven-day horizon does not reset “every three days” on each launch. This is
+  cadence math, not a claim about historical completion.
+- `ApprovedWorkout` and `NutritionPlanningNeed` are deliberately small
+  scheduling projections. Full workout prescription and food/inventory
+  management remain Phases 7 and 6.
+- Explicit recovery dispositions remain authoritative planning inputs:
+  later-today and tomorrow choices create bounded due-window overrides, while
+  weekly-backlog and drop choices keep the mission out of the generated
+  seven-day timeline until a later user decision supersedes them.
+
 ## Persistence strategy
 
 Phase 1 uses a `MissionControlRepository` boundary in the core, with an in-memory implementation for deterministic tests and a SwiftData implementation in the app target. Domain structs remain persistence-agnostic. The app adapter stores one schema-versioned local snapshot record whose JSON payload is encoded from the typed core snapshot; adapter round-trip tests protect that mapping. This intentionally simple record can be migrated into normalized SwiftData records when editing breadth requires it, without changing core consumers.
@@ -119,6 +160,11 @@ Persistence rules:
 
 - local storage is authoritative by default;
 - migrations are explicit and tested against representative fixtures;
+- the current snapshot schema is version 5; version 5 adds optional schedule
+  block identity to mission-start history while retaining schema-4 decoding;
+- a load or migration failure puts the app into visible session-only mode and
+  disables repository writes, preventing fallback seed data from overwriting
+  the unreadable durable record;
 - schedule decisions and completions are append-friendly history rather than destructive edits;
 - raw voice audio is temporary and excluded from ordinary persistence;
 - secrets use Keychain, not SwiftData or configuration files;
@@ -137,6 +183,14 @@ Provider configuration must disclose what leaves the device. The default path su
 - EventKit, HealthKit, Speech, UserNotifications, and App Intents require entitlements, purpose strings, availability checks, and/or user permission before use.
 - HealthKit and several notification/intent behaviors require real-device validation.
 - Speech availability and authorization can change at runtime; the UI must retain text entry and retry/cancel paths.
+- Phase 3 uses `SFSpeechRecognizer` for iOS 17/Xcode 15 compatibility,
+  requires on-device recognition when the selected locale supports it, and
+  otherwise allows the Apple system speech fallback. It records to in-memory
+  audio buffers only and clears the request after transcription or failure.
+- Phase 4 uses `UNUserNotificationCenter` behind `NotificationService`.
+  Categories and actions register at launch, and stable per-block request
+  identifiers allow pending pre-start, start, late-15, and late-30 reminders to
+  be replaced or cancelled whenever persisted schedule state changes.
 - New SDK conveniences must be wrapped in availability checks when they exceed the deployment target.
 - iCal import should prefer standards-based read-only metadata before provider-specific integration.
 

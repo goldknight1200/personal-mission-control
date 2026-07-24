@@ -8,6 +8,11 @@ final class PlanningPolicyTests: XCTestCase {
         XCTAssertEqual(policy.timeZoneIdentifier, "Europe/Berlin")
         XCTAssertEqual(policy.planningHorizonDays, 7)
         XCTAssertEqual(policy.minimumFocusedBlockMinutes, 30)
+        XCTAssertEqual(policy.sleepTargetMinutes, 450)
+        XCTAssertEqual(policy.practicalSleepMinimumMinutes, 390)
+        XCTAssertEqual(policy.reconsiderDemandingWorkBelowMinutes, 360)
+        XCTAssertEqual(policy.preferredWakeMinute, 7 * 60 + 30)
+        XCTAssertEqual(policy.generatedGridMinutes, 5)
     }
 
     func testCustomPolicyIsNotCoupledToBaseline() {

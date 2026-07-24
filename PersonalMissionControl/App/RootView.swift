@@ -1,3 +1,4 @@
+import Foundation
 import MissionControlCore
 import SwiftUI
 
@@ -75,13 +76,23 @@ enum MenuDestination: String, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
 struct RootView: View {
     @ObservedObject var model: AppModel
+    @StateObject private var voiceCapture: VoiceCaptureViewModel
 
     @State private var selectedTab: AppTab = .home
     @State private var isMenuOpen = false
     @State private var menuDestination: MenuDestination?
-    @State private var isVoicePlaceholderPresented = false
+
+    init(model: AppModel) {
+        self.model = model
+        _voiceCapture = StateObject(
+            wrappedValue: VoiceCaptureViewModel(
+                service: AppleSpeechTranscriptionService()
+            )
+        )
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -89,9 +100,31 @@ struct RootView: View {
                 selectedContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                if let statusMessage = voiceCapture.statusMessage {
+                    Label(
+                        statusMessage,
+                        systemImage: voiceCapture.isRecording ? "waveform" : "mic"
+                    )
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(voiceCapture.isRecording ? Color.red : Color.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .accessibilityLabel(Text(statusMessage))
+                }
+
                 MissionControlTabBar(
                     selection: $selectedTab,
-                    microphoneAction: { isVoicePlaceholderPresented = true }
+                    isRecording: voiceCapture.isRecording,
+                    microphonePressed: {
+                        voiceCapture.pressBegan(
+                            localeIdentifier: Locale.autoupdatingCurrent.identifier
+                        )
+                    },
+                    microphoneReleased: voiceCapture.pressEnded,
+                    microphoneFallback: voiceCapture.presentTextEntry
                 )
             }
 
@@ -114,12 +147,41 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: isMenuOpen)
-        .sheet(isPresented: $isVoicePlaceholderPresented) {
-            VoicePlaceholderView()
-                .presentationDetents([.medium])
+        .sheet(
+            isPresented: $voiceCapture.isReviewPresented,
+            onDismiss: voiceCapture.dismissReview
+        ) {
+            VoiceCommandFlowView(model: model, capture: voiceCapture)
         }
         .sheet(item: $menuDestination) { destination in
             menuSheet(for: destination)
+        }
+        .sheet(item: $model.executionPrompt) { prompt in
+            ExecutionPromptView(model: model, prompt: prompt)
+        }
+        .alert(
+            "Voice capture",
+            isPresented: Binding(
+                get: { voiceCapture.alertMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        voiceCapture.clearAlert()
+                    }
+                }
+            )
+        ) {
+            Button("Type instead") {
+                voiceCapture.clearAlert()
+                voiceCapture.presentTextEntry()
+            }
+            Button("OK", role: .cancel) {
+                voiceCapture.clearAlert()
+            }
+        } message: {
+            Text(voiceCapture.alertMessage ?? "")
+        }
+        .task {
+            await model.prepareActiveExecution()
         }
     }
 
@@ -127,7 +189,17 @@ struct RootView: View {
     private var selectedContent: some View {
         switch selectedTab {
         case .home:
-            HomeView(model: model, openMenu: openMenu)
+            HomeView(
+                model: model,
+                openMenu: openMenu,
+                voicePressed: {
+                    voiceCapture.pressBegan(
+                        localeIdentifier: Locale.autoupdatingCurrent.identifier
+                    )
+                },
+                voiceReleased: voiceCapture.pressEnded,
+                voiceFallback: voiceCapture.presentTextEntry
+            )
         case .goals:
             GoalsView(model: model, openMenu: openMenu)
         case .lists:
@@ -146,6 +218,10 @@ struct RootView: View {
                     ProfileSettingsView(profile: model.snapshot.profile, onSave: model.updateProfile)
                 case .appearance:
                     AppearanceSettingsView(profile: model.snapshot.profile, onSave: model.updateProfile)
+                case .history:
+                    HistoryConsistencyView(model: model)
+                case .notifications:
+                    NotificationSettingsView(model: model)
                 default:
                     MenuPlaceholderView(destination: destination)
                 }

@@ -16,7 +16,10 @@ The checked-in Word prompt pack is reference material. Repository Markdown is th
 
 ## Current phase
 
-Phase 1 provides the local vertical slice: core domain values, repository-backed SwiftData persistence, editable seed defaults, app navigation, and the execution-focused Home experience. Phase 2 deterministic scheduling and replanning are the next scope; do not simulate or pull them into Phase 1 merely to make demo data look dynamic.
+Phases 1 through 4 are present in source. Phase 2 supplies the production
+deterministic seven-day planner and minimal-change replanner used by Home,
+Plan, voice-command mutations, and active-execution recovery. Do not begin
+Phase 5 without an explicit request.
 
 ## Architecture rules
 

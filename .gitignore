@@ -20,3 +20,6 @@ Package.resolved
 
 # macOS
 .DS_Store
+
+# Microsoft Office owner/lock files
+~$*.docx

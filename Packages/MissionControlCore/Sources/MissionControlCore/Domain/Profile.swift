@@ -92,11 +92,59 @@ public struct NutritionTargets: Codable, Equatable, Sendable {
     public var approximateCalories: Int
     public var approximateProteinGrams: Int
     public var substantialMeals: Int
+    public var preferredMealStartMinutes: [Int]
 
-    public init(approximateCalories: Int, approximateProteinGrams: Int, substantialMeals: Int) {
+    public init(
+        approximateCalories: Int,
+        approximateProteinGrams: Int,
+        substantialMeals: Int,
+        preferredMealStartMinutes: [Int] = [8 * 60, 13 * 60, 19 * 60]
+    ) {
         self.approximateCalories = approximateCalories
         self.approximateProteinGrams = approximateProteinGrams
         self.substantialMeals = substantialMeals
+        self.preferredMealStartMinutes = preferredMealStartMinutes
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case approximateCalories
+        case approximateProteinGrams
+        case substantialMeals
+        case preferredMealStartMinutes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        approximateCalories = try container.decode(
+            Int.self,
+            forKey: .approximateCalories
+        )
+        approximateProteinGrams = try container.decode(
+            Int.self,
+            forKey: .approximateProteinGrams
+        )
+        substantialMeals = try container.decode(
+            Int.self,
+            forKey: .substantialMeals
+        )
+        preferredMealStartMinutes = try container.decodeIfPresent(
+            [Int].self,
+            forKey: .preferredMealStartMinutes
+        ) ?? [8 * 60, 13 * 60, 19 * 60]
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(approximateCalories, forKey: .approximateCalories)
+        try container.encode(
+            approximateProteinGrams,
+            forKey: .approximateProteinGrams
+        )
+        try container.encode(substantialMeals, forKey: .substantialMeals)
+        try container.encode(
+            preferredMealStartMinutes,
+            forKey: .preferredMealStartMinutes
+        )
     }
 }
 

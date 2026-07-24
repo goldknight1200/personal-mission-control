@@ -4,6 +4,9 @@ import SwiftUI
 struct HomeView: View {
     @ObservedObject var model: AppModel
     let openMenu: () -> Void
+    let voicePressed: () -> Void
+    let voiceReleased: () -> Void
+    let voiceFallback: () -> Void
 
     @State private var durationMission: Mission?
 
@@ -12,10 +15,20 @@ struct HomeView: View {
             GeometryReader { geometry in
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     let now = context.date
-                    let blocks = model.snapshot.scheduleBlocks
+                    let todayStart = localCalendar.startOfDay(for: now)
+                    let tomorrow = localCalendar.date(
+                        byAdding: .day,
+                        value: 1,
+                        to: todayStart
+                    ) ?? now.addingTimeInterval(86_400)
+                    let blocks = model.snapshot.scheduleBlocks.filter {
+                        $0.start < tomorrow && $0.end > todayStart
+                    }
                     let currentBlock = ScheduleTimeline.currentBlock(in: blocks, at: now)
                     let upcoming = ScheduleTimeline.upcomingBlocks(in: blocks, after: now)
                     let currentMission = model.snapshot.mission(withID: currentBlock?.missionID)
+                    let unresolvedBlock = model.mostRelevantUnresolvedBlock(at: now)
+                    let eveningSummary = model.eveningSummary(at: now)
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 16) {
@@ -26,6 +39,61 @@ struct HomeView: View {
                             )
                             .frame(height: min(max(geometry.size.height * 0.28, 210), 270))
                             .frame(maxWidth: .infinity)
+
+                            if DailyReflection.shouldShowMorning(
+                                snapshot: model.snapshot,
+                                at: now
+                            ) {
+                                MorningCheckInCard(
+                                    noChanges: {
+                                        model.recordMorningNoChanges(at: now)
+                                    },
+                                    voicePressed: voicePressed,
+                                    voiceReleased: voiceReleased,
+                                    voiceFallback: voiceFallback
+                                )
+                            }
+
+                            if model.notificationAuthorizationState == .notDetermined {
+                                NotificationPermissionCard {
+                                    Task {
+                                        await model.requestNotificationAuthorization()
+                                    }
+                                }
+                            }
+
+                            if let unresolvedBlock,
+                               let missionID = unresolvedBlock.missionID {
+                                MissedMissionCard(
+                                    block: unresolvedBlock,
+                                    missionTitle: model.snapshot.mission(
+                                        withID: missionID
+                                    )?.title ?? unresolvedBlock.title,
+                                    profile: model.snapshot.profile,
+                                    action: { action in
+                                        let notificationStage:
+                                            MissionNotificationStage
+                                        switch model.latenessState(
+                                            for: unresolvedBlock,
+                                            at: now
+                                        ) {
+                                        case .some(.late30):
+                                            notificationStage = .late30
+                                        case .some(.late15):
+                                            notificationStage = .late15
+                                        default:
+                                            notificationStage = .start
+                                        }
+                                        model.presentExecutionAction(
+                                            action,
+                                            missionID: missionID,
+                                            scheduleBlockID: unresolvedBlock.id,
+                                            at: now,
+                                            notificationStage: notificationStage
+                                        )
+                                    }
+                                )
+                            }
 
                             if let currentBlock {
                                 CurrentMissionCard(
@@ -40,8 +108,17 @@ struct HomeView: View {
                                         guard let missionID = currentMission?.id else { return }
                                         model.completeMission(
                                             missionID,
+                                            scheduleBlockID: currentBlock.id,
                                             at: now,
                                             plannedDurationMinutes: currentBlock.durationMinutes
+                                        )
+                                    },
+                                    partial: {
+                                        guard let missionID = currentMission?.id else { return }
+                                        model.recordPartialMission(
+                                            missionID: missionID,
+                                            scheduleBlockID: currentBlock.id,
+                                            at: now
                                         )
                                     },
                                     adjustDuration: {
@@ -78,6 +155,27 @@ struct HomeView: View {
                                 .padding(.top, 6)
                             }
 
+                            if DailyReflection.shouldShowEvening(
+                                snapshot: model.snapshot,
+                                at: now
+                            ) {
+                                EveningSummaryCard(
+                                    summary: eveningSummary,
+                                    missionTitle: { block in
+                                        model.snapshot.mission(
+                                            withID: block.missionID
+                                        )?.title ?? block.title
+                                    },
+                                    resolve: { blockID, disposition in
+                                        model.resolveEveningItem(
+                                            scheduleBlockID: blockID,
+                                            disposition: disposition,
+                                            at: now
+                                        )
+                                    }
+                                )
+                            }
+
                             if let notice = model.persistenceNotice {
                                 Label(notice, systemImage: "exclamationmark.triangle")
                                     .font(.footnote)
@@ -108,6 +206,204 @@ struct HomeView: View {
             )
             .presentationDetents([.height(320)])
         }
+    }
+
+    private var localCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(
+            identifier: model.snapshot.profile.timeZoneIdentifier
+        ) ?? .current
+        return calendar
+    }
+}
+
+private struct MorningCheckInCard: View {
+    let noChanges: () -> Void
+    let voicePressed: () -> Void
+    let voiceReleased: () -> Void
+    let voiceFallback: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Anything changed?")
+                    .font(.title3.weight(.semibold))
+                Text("The provisional plan is ready.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("No changes", action: noChanges)
+                .buttonStyle(.bordered)
+
+            Image(systemName: isPressed ? "waveform" : "mic.fill")
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background(Circle().fill(isPressed ? Color.red : Color.accentColor))
+                .contentShape(Circle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            guard !isPressed else { return }
+                            isPressed = true
+                            voicePressed()
+                        }
+                        .onEnded { _ in
+                            guard isPressed else { return }
+                            isPressed = false
+                            voiceReleased()
+                        }
+                )
+                .accessibilityElement()
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Tell Mission Control what changed")
+                .accessibilityHint("Press and hold to record, then release to review.")
+                .accessibilityAction {
+                    voiceFallback()
+                }
+        }
+        .missionControlCard()
+    }
+}
+
+private struct NotificationPermissionCard: View {
+    let allow: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bell.badge")
+                .font(.title2)
+                .foregroundStyle(Color.accentColor)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Keep the day aligned")
+                    .font(.headline)
+                Text("Allow local mission reminders and recovery actions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Allow", action: allow)
+                .buttonStyle(.borderedProminent)
+        }
+        .missionControlCard()
+    }
+}
+
+private struct MissedMissionCard: View {
+    let block: ScheduleBlock
+    let missionTitle: String
+    let profile: UserProfile
+    let action: (MissionNotificationActionKind) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                Label("Plan needs attention", systemImage: "clock.badge.exclamationmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.orange)
+                Spacer()
+                Text(MissionControlFormatters.time(block.start, profile: profile))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(missionTitle)
+                .font(.title3.weight(.semibold))
+
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: 8
+            ) {
+                recoveryButton("Already Started", .alreadyStarted)
+                recoveryButton("Start Now", .startNow)
+                recoveryButton("Replan", .replan)
+                recoveryButton("Skip", .skip)
+            }
+        }
+        .missionControlCard()
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.orange.opacity(0.3))
+        )
+    }
+
+    private func recoveryButton(
+        _ title: String,
+        _ kind: MissionNotificationActionKind
+    ) -> some View {
+        Button(title) {
+            action(kind)
+        }
+        .buttonStyle(.bordered)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct EveningSummaryCard: View {
+    let summary: EveningExecutionSummary
+    let missionTitle: (ScheduleBlock) -> String
+    let resolve: (EntityID, UnresolvedMissionDisposition) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Evening summary")
+                .font(.headline)
+
+            HStack(spacing: 18) {
+                count(summary.completedCount, "Completed", .green)
+                count(summary.partialCount, "Partial", .orange)
+                count(summary.skippedCount, "Skipped", .secondary)
+            }
+
+            if summary.unresolvedBlocks.isEmpty {
+                Label("Nothing needs a decision.", systemImage: "checkmark.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Divider()
+                Text("Decide only the unresolved items")
+                    .font(.subheadline.weight(.semibold))
+
+                ForEach(summary.unresolvedBlocks) { block in
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text(missionTitle(block))
+                            .font(.headline)
+                        HStack {
+                            dispositionButton("Tomorrow", .moveToTomorrow, block.id)
+                            dispositionButton("Backlog", .weeklyBacklog, block.id)
+                            dispositionButton("Drop", .drop, block.id)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .missionControlCard()
+    }
+
+    private func count(_ value: Int, _ label: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("\(value)")
+                .font(.title2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func dispositionButton(
+        _ title: String,
+        _ disposition: UnresolvedMissionDisposition,
+        _ blockID: EntityID
+    ) -> some View {
+        Button(title) {
+            resolve(blockID, disposition)
+        }
+        .font(.caption.weight(.semibold))
+        .buttonStyle(.bordered)
     }
 }
 
@@ -179,6 +475,7 @@ private struct CurrentMissionCard: View {
     let profile: UserProfile
     let toggleStep: (EntityID) -> Void
     let complete: () -> Void
+    let partial: () -> Void
     let adjustDuration: () -> Void
 
     private var accent: Color { profile.color(for: block.category) }
@@ -221,26 +518,45 @@ private struct CurrentMissionCard: View {
             }
 
             if let mission {
-                if mission.status == .completed {
+                if mission.status == .completed || mission.status == .partial {
                     HStack {
-                        Label("Completed", systemImage: "checkmark.circle.fill")
+                        Label(
+                            mission.status == .completed ? "Completed" : "Partial",
+                            systemImage: mission.status == .completed
+                                ? "checkmark.circle.fill"
+                                : "circle.lefthalf.filled"
+                        )
                             .font(.headline)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(
+                                mission.status == .completed ? Color.green : Color.orange
+                            )
                         Spacer()
                         Button("Adjust time", action: adjustDuration)
                             .font(.subheadline.weight(.semibold))
                     }
                 } else {
-                    Button(action: complete) {
-                        Label("Mark complete", systemImage: "checkmark")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
+                    HStack {
+                        Button("Partial", action: partial)
+                            .buttonStyle(.bordered)
+                        Button(action: complete) {
+                            Label("Complete", systemImage: "checkmark")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(accent)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
                 }
             } else if block.kind.isTransition {
                 Label("Visible transition time", systemImage: "arrow.right")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if block.kind == .sleep {
+                Label("Protected recovery", systemImage: "moon.zzz")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if block.kind == .freeTime {
+                Label("Intentionally open", systemImage: "leaf")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -287,24 +603,36 @@ private struct UpcomingBlockCard: View {
     var body: some View {
         HStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(block.kind.isTransition ? Color.secondary.opacity(0.4) : accent)
+                .fill(isQuiet ? Color.secondary.opacity(0.4) : accent)
                 .frame(width: 4, height: 42)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(label.uppercased())
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(block.kind.isTransition ? Color.secondary : accent)
+                    .foregroundStyle(isQuiet ? Color.secondary : accent)
                 Text(block.title)
-                    .font(.body.weight(block.kind.isTransition ? .regular : .semibold))
-                    .foregroundStyle(block.kind.isTransition ? Color.secondary : Color.primary)
+                    .font(.body.weight(isQuiet ? .regular : .semibold))
+                    .foregroundStyle(isQuiet ? Color.secondary : Color.primary)
                 if block.kind.isTransition {
                     Text(block.kind == .travel ? "Travel" : "Preparation")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                } else if block.kind == .sleep {
+                    Text("Recovery")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                } else if block.kind == .freeTime {
+                    Text("Preserved")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 } else if mission?.status == .completed {
                     Text("Completed")
                         .font(.caption)
                         .foregroundStyle(.green)
+                } else if mission?.status == .partial {
+                    Text("Partial")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
 
@@ -317,9 +645,15 @@ private struct UpcomingBlockCard: View {
         .padding(15)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.primary.opacity(block.kind.isTransition ? 0.025 : 0.045))
+                .fill(Color.primary.opacity(isQuiet ? 0.025 : 0.045))
         )
         .accessibilityElement(children: .combine)
+    }
+
+    private var isQuiet: Bool {
+        block.kind.isTransition
+            || block.kind == .sleep
+            || block.kind == .freeTime
     }
 }
 

@@ -63,7 +63,14 @@ final class SwiftDataMissionControlRepository: MissionControlRepository {
                 supported: MissionControlSnapshot.currentSchemaVersion
             )
         }
-        return try decoder.decode(MissionControlSnapshot.self, from: record.payload)
+        var snapshot = try decoder.decode(MissionControlSnapshot.self, from: record.payload)
+        if record.schemaVersion < MissionControlSnapshot.currentSchemaVersion {
+            snapshot.schemaVersion = MissionControlSnapshot.currentSchemaVersion
+            record.schemaVersion = MissionControlSnapshot.currentSchemaVersion
+            record.payload = try encoder.encode(snapshot)
+            try saveContextOrRollback()
+        }
+        return snapshot
     }
 
     func saveSnapshot(_ snapshot: MissionControlSnapshot) throws {
@@ -84,6 +91,15 @@ final class SwiftDataMissionControlRepository: MissionControlRepository {
                 )
             )
         }
-        try context.save()
+        try saveContextOrRollback()
+    }
+
+    private func saveContextOrRollback() throws {
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 }

@@ -98,126 +98,46 @@ public enum MissionControlSeed {
             travelAfterMinutes: profile.transitions.gymTravelEachWayMinutes,
             location: "Gym"
         )
-        let mealMission = Mission(
-            category: .nutrition,
-            title: "Substantial meal",
-            rigidity: .protected,
-            importance: .high,
-            estimatedDurationMinutes: 30,
-            minimumUsefulBlockMinutes: 20,
-            consistencyCost: .high,
-            energyDemand: .low
-        )
-        let tidyMission = Mission(
-            category: .household,
-            title: "Light tidy",
-            rigidity: .flexible,
-            importance: .normal,
-            urgency: .normal,
-            estimatedDurationMinutes: 15,
-            minimumUsefulBlockMinutes: 10,
-            energyDemand: .low,
-            physicalLoad: .light
-        )
-
-        let start = snapToFiveMinutes(referenceDate.addingTimeInterval(-20 * 60))
-        let projectEnd = start.addingTimeInterval(60 * 60)
-        let preparationEnd = projectEnd.addingTimeInterval(10 * 60)
-        let travelEnd = preparationEnd.addingTimeInterval(16 * 60)
-        let gymEnd = travelEnd.addingTimeInterval(60 * 60)
-        let returnEnd = gymEnd.addingTimeInterval(16 * 60)
-        let showerEnd = returnEnd.addingTimeInterval(30 * 60)
-        let mealEnd = showerEnd.addingTimeInterval(30 * 60)
-        let tidyEnd = mealEnd.addingTimeInterval(15 * 60)
-
-        let blocks = [
-            ScheduleBlock(
-                missionID: projectMission.id,
-                title: projectMission.title,
-                category: .project,
-                kind: .mission,
-                rigidity: .protected,
-                start: start,
-                end: projectEnd
-            ),
-            ScheduleBlock(
-                title: "Prepare for gym",
-                category: .gym,
-                kind: .preparation,
-                rigidity: .fixed,
-                start: projectEnd,
-                end: preparationEnd
-            ),
-            ScheduleBlock(
-                title: "Travel to gym",
-                category: .gym,
-                kind: .travel,
-                rigidity: .fixed,
-                start: preparationEnd,
-                end: travelEnd
-            ),
-            ScheduleBlock(
-                missionID: gymMission.id,
-                title: gymMission.title,
-                category: .gym,
-                kind: .mission,
-                rigidity: .protected,
-                start: travelEnd,
-                end: gymEnd
-            ),
-            ScheduleBlock(
-                title: "Travel home",
-                category: .gym,
-                kind: .travel,
-                rigidity: .fixed,
-                start: gymEnd,
-                end: returnEnd
-            ),
-            ScheduleBlock(
-                title: "Shower and change",
-                category: .recovery,
-                kind: .preparation,
-                rigidity: .fixed,
-                start: returnEnd,
-                end: showerEnd
-            ),
-            ScheduleBlock(
-                missionID: mealMission.id,
-                title: mealMission.title,
-                category: .nutrition,
-                kind: .meal,
-                rigidity: .protected,
-                start: showerEnd,
-                end: mealEnd
-            ),
-            ScheduleBlock(
-                missionID: tidyMission.id,
-                title: tidyMission.title,
-                category: .household,
-                kind: .mission,
-                rigidity: .flexible,
-                start: mealEnd,
-                end: tidyEnd
-            )
-        ]
-
-        let nextTrainingStart = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-        let training = FixedCommitment(
+        let horizonStart = calendar.startOfDay(for: referenceDate)
+        let nutritionNeeds = (0..<profile.planningPolicy.planningHorizonDays)
+            .compactMap { dayOffset -> NutritionPlanningNeed? in
+                guard let day = calendar.date(
+                    byAdding: .day,
+                    value: dayOffset,
+                    to: horizonStart
+                ) else {
+                    return nil
+                }
+                return NutritionPlanningNeed(
+                    localDay: day,
+                    substantialMealsRequired:
+                        profile.nutritionTargets.substantialMeals
+                )
+            }
+        let footballRoutine = Routine(
             title: "Football training — configurable default",
             category: .football,
-            start: nextTrainingStart,
-            end: nextTrainingStart.addingTimeInterval(120 * 60),
-            location: "Training ground"
+            rigidity: .protected,
+            recurrence: RecurrencePattern(
+                frequency: .weekly,
+                weekdays: profile.footballPattern.trainingWeekdays,
+                preferredStartMinute:
+                    profile.footballPattern.historicalTrainingStartMinute
+            ),
+            estimatedDurationMinutes:
+                profile.footballPattern.historicalTrainingDurationMinutes,
+            dueWindowMinutes: 120,
+            note: "Historical preference only; actual sessions can replace it."
         )
 
         return MissionControlSnapshot(
             profile: profile,
             goals: [goal],
             projects: [project],
-            missions: [projectMission, gymMission, mealMission, tidyMission],
-            scheduleBlocks: blocks,
-            fixedCommitments: [training],
-            routines: householdRoutines,
+            missions: [projectMission, gymMission],
+            scheduleBlocks: [],
+            fixedCommitments: [],
+            routines: [footballRoutine] + householdRoutines,
             checklists: [
                 Checklist(
                     title: "Today",
@@ -237,7 +157,29 @@ public enum MissionControlSeed {
                         ChecklistItem(title: "Chicken", quantity: "4 meals")
                     ]
                 )
-            ]
+            ],
+            inventoryItems: [
+                InventoryItem(
+                    name: "Milk",
+                    state: .low,
+                    quantityNote: "One serving remaining",
+                    updatedAt: referenceDate
+                )
+            ],
+            approvedWorkouts: [
+                ApprovedWorkout(
+                    missionID: gymMission.id,
+                    preferredWeekdays: [
+                        .monday,
+                        .wednesday,
+                        .friday,
+                        .sunday
+                    ],
+                    weeklySessionTarget: profile.gymWeeklyTarget.minimum,
+                    preferredStartMinute: 16 * 60
+                )
+            ],
+            nutritionPlanningNeeds: nutritionNeeds
         )
     }
 
@@ -313,9 +255,4 @@ public enum MissionControlSeed {
         )
     ]
 
-    private static func snapToFiveMinutes(_ date: Date) -> Date {
-        let grid = 5.0 * 60.0
-        let snapped = floor(date.timeIntervalSinceReferenceDate / grid) * grid
-        return Date(timeIntervalSinceReferenceDate: snapped)
-    }
 }
