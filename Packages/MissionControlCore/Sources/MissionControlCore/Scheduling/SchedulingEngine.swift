@@ -1143,7 +1143,7 @@ private final class Planner {
         let candidateDays = candidate.preferredDayStarts.isEmpty
             ? dayStarts
             : candidate.preferredDayStarts
-        for day in candidateDays.sorted() {
+        for day in candidateDays {
             var earliest = awakeStart(for: day).addingTimeInterval(
                 TimeInterval(spec.beforeMinutes * 60)
             )
