@@ -6,6 +6,7 @@ public enum CommandApplicationError: Error, Equatable, Sendable {
     case unresolvedMission(String)
     case invalidDuration
     case invalidDate
+    case staleCommand
 }
 
 public struct CommandApplicationResult: Equatable, Sendable {
@@ -74,6 +75,11 @@ public struct CommandMutationApplicator {
                     missionName: missionName,
                     snapshot: working
                 )
+                try requireCompatiblePlacement(
+                    missionID: resolvedID,
+                    command: command,
+                    snapshot: working
+                )
                 let actualStart = command.createdAt.addingTimeInterval(
                     -TimeInterval(minutesAgo * 60)
                 )
@@ -139,6 +145,11 @@ public struct CommandMutationApplicator {
                     missionName: missionName,
                     snapshot: working
                 )
+                try requireCompatiblePlacement(
+                    missionID: resolvedID,
+                    command: command,
+                    snapshot: working
+                )
                 requests.append(
                     ReplanRequest(
                         reason: .missionMove,
@@ -153,6 +164,11 @@ public struct CommandMutationApplicator {
                 let resolvedID = try requireMissionID(
                     missionID,
                     missionName: missionName,
+                    snapshot: working
+                )
+                try requireCompatiblePlacement(
+                    missionID: resolvedID,
+                    command: command,
                     snapshot: working
                 )
                 let scheduleBlockID = executionBlockID(
@@ -269,6 +285,36 @@ public struct CommandMutationApplicator {
 
     private func normalized(_ value: String) -> String {
         value.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func requireCompatiblePlacement(
+        missionID: EntityID,
+        command: StructuredCommand,
+        snapshot: MissionControlSnapshot
+    ) throws {
+        guard
+            let expectedStart = command.affectedScheduleRange.start,
+            let expectedEnd = command.affectedScheduleRange.end
+        else {
+            return
+        }
+        guard command.proposedMutations.count == 1 else {
+            throw CommandApplicationError.staleCommand
+        }
+        guard
+            let blockID = executionBlockID(
+                missionID: missionID,
+                at: command.createdAt,
+                snapshot: snapshot
+            ),
+            let block = snapshot.scheduleBlocks.first(where: {
+                $0.id == blockID
+            }),
+            block.start == expectedStart,
+            block.end == expectedEnd
+        else {
+            throw CommandApplicationError.staleCommand
+        }
     }
 
     private func executionBlockID(

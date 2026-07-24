@@ -64,17 +64,21 @@ private final class Planner {
         calendar.timeZone = TimeZone(
             identifier: input.profile.timeZoneIdentifier
         ) ?? .current
-        self.calendar = calendar
-        horizonStart = calendar.startOfDay(for: input.currentTime)
-        horizonEnd = calendar.date(
+        let horizonStart = calendar.startOfDay(for: input.currentTime)
+        let horizonEnd = calendar.date(
             byAdding: .day,
             value: input.profile.planningPolicy.planningHorizonDays,
             to: horizonStart
         ) ?? horizonStart.addingTimeInterval(7 * 86_400)
-        dayStarts = (0..<input.profile.planningPolicy.planningHorizonDays)
+        let dayStarts = (0..<input.profile.planningPolicy.planningHorizonDays)
             .compactMap {
                 calendar.date(byAdding: .day, value: $0, to: horizonStart)
             }
+
+        self.calendar = calendar
+        self.horizonStart = horizonStart
+        self.horizonEnd = horizonEnd
+        self.dayStarts = dayStarts
     }
 
     func run() -> SchedulingResult {
@@ -580,8 +584,10 @@ private final class Planner {
                     && $0.completedAt >= horizonStart
                     && $0.completedAt < horizonEnd
             }.count
-            let recoveryWindow = input.dueWindowOverrides[mission.id]
-            let scheduledRecoveryCount = recoveryWindow == nil ? 0 : 1
+            let recoveryWindows = input.recoveryDueWindows[mission.id]
+                ?? input.dueWindowOverrides[mission.id].map { [$0] }
+                ?? []
+            let scheduledRecoveryCount = recoveryWindows.count
             let deferredOccurrenceCount =
                 input.deferredOccurrenceCounts[mission.id] ?? 0
             let remainingTarget = max(
@@ -675,22 +681,24 @@ private final class Planner {
                     )
                 )
             }
-            if let recoveryWindow {
+            for (recoveryIndex, recoveryWindow) in recoveryWindows.enumerated() {
+                let recoveryStart = recoveryWindow.earliest ?? horizonStart
+                let recoveryEnd = recoveryWindow.latest ?? horizonEnd
                 let eligibleDays = dayStarts.filter { day in
-                    awakeEnd(for: day) > recoveryWindow.earliest
-                        && awakeStart(for: day) < recoveryWindow.latest
+                    awakeEnd(for: day) > recoveryStart
+                        && awakeStart(for: day) < recoveryEnd
                 }
                 candidates.append(
                     Candidate(
                         mission: mission,
                         routineID: nil,
-                        occurrenceKey: "workout.\(workout.id.rawValue.uuidString).recovery.\(timestampKey(recoveryWindow.earliest))",
+                        occurrenceKey: "workout.\(workout.id.rawValue.uuidString).recovery.\(timestampKey(recoveryStart)).\(recoveryIndex)",
                         stage: 3,
                         preferredDayStarts: eligibleDays,
                         preferredStartMinute: workout.preferredStartMinute
                             ?? preferredMinute(for: mission),
-                        earliest: recoveryWindow.earliest,
-                        latest: recoveryWindow.latest,
+                        earliest: recoveryStart,
+                        latest: recoveryEnd,
                         existingBlock: nil,
                         repeatedMissCause: latestMissCause(for: mission)
                     )
@@ -1137,7 +1145,7 @@ private final class Planner {
         let candidateDays = candidate.preferredDayStarts.isEmpty
             ? dayStarts
             : candidate.preferredDayStarts
-        for day in candidateDays.sorted() {
+        for day in candidateDays {
             var earliest = awakeStart(for: day).addingTimeInterval(
                 TimeInterval(spec.beforeMinutes * 60)
             )

@@ -26,6 +26,33 @@ extension AppModel {
     }
 
     func reconcileNotifications(at date: Date = Date()) async {
+        notificationReconciliationGeneration += 1
+        notificationReconciliationDate = date
+        if let notificationReconciliationTask {
+            await notificationReconciliationTask.value
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.drainNotificationReconciliations()
+        }
+        notificationReconciliationTask = task
+        await task.value
+    }
+
+    private func drainNotificationReconciliations() async {
+        while true {
+            let generation = notificationReconciliationGeneration
+            let date = notificationReconciliationDate
+            await performNotificationReconciliation(at: date)
+            if generation == notificationReconciliationGeneration {
+                break
+            }
+        }
+        notificationReconciliationTask = nil
+    }
+
+    private func performNotificationReconciliation(at date: Date) async {
         guard notificationAuthorizationState == .authorized
             || notificationAuthorizationState == .provisional else {
             return
@@ -690,6 +717,9 @@ final class AppModel: ObservableObject {
     private let scheduleReplanner: any ScheduleReplanning
     private let notificationService: any NotificationService
     private var isRepositoryWritable = true
+    private var notificationReconciliationGeneration = 0
+    private var notificationReconciliationDate = Date()
+    private var notificationReconciliationTask: Task<Void, Never>?
 
     init(
         repository: any MissionControlRepository,
@@ -698,13 +728,14 @@ final class AppModel: ObservableObject {
         usesDurableStorage: Bool = true,
         commandInterpreter: any CommandInterpreting = LocalCommandParser(),
         scheduleReplanner: any ScheduleReplanning = ReplanningEngine(),
-        notificationService: any NotificationService = UnavailableNotificationService()
+        notificationService: (any NotificationService)? = nil
     ) {
         self.repository = repository
         self.usesDurableStorage = usesDurableStorage
         self.commandInterpreter = commandInterpreter
         self.scheduleReplanner = scheduleReplanner
-        self.notificationService = notificationService
+        self.notificationService =
+            notificationService ?? UnavailableNotificationService()
         commandApplicator = CommandMutationApplicator(replanner: scheduleReplanner)
         persistenceNotice = startupNotice
 
@@ -948,6 +979,10 @@ final class AppModel: ObservableObject {
                 return .rejected("The reported duration is invalid.")
             case .invalidDate:
                 return .rejected("The proposed date or time is no longer valid.")
+            case .staleCommand:
+                return .rejected(
+                    "The schedule changed after this command was reviewed. Review it again."
+                )
             }
         } catch {
             persistenceNotice = "The voice command was not saved. No schedule data changed."

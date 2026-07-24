@@ -27,6 +27,7 @@ public struct PlanningInput: Equatable, Sendable {
     public var deferredMissionIDs: Set<EntityID>
     public var deferredOccurrenceCounts: [EntityID: Int]
     public var dueWindowOverrides: [EntityID: DueWindow]
+    public var recoveryDueWindows: [EntityID: [DueWindow]]
 
     public init(
         currentTime: Date,
@@ -46,7 +47,8 @@ public struct PlanningInput: Equatable, Sendable {
         lockedBlocks: [ScheduleBlock] = [],
         deferredMissionIDs: Set<EntityID> = [],
         deferredOccurrenceCounts: [EntityID: Int] = [:],
-        dueWindowOverrides: [EntityID: DueWindow] = [:]
+        dueWindowOverrides: [EntityID: DueWindow] = [:],
+        recoveryDueWindows: [EntityID: [DueWindow]] = [:]
     ) {
         self.currentTime = currentTime
         self.profile = profile
@@ -66,6 +68,7 @@ public struct PlanningInput: Equatable, Sendable {
         self.deferredMissionIDs = deferredMissionIDs
         self.deferredOccurrenceCounts = deferredOccurrenceCounts
         self.dueWindowOverrides = dueWindowOverrides
+        self.recoveryDueWindows = recoveryDueWindows
     }
 
     public init(
@@ -73,27 +76,35 @@ public struct PlanningInput: Equatable, Sendable {
         currentTime: Date,
         lockedBlocks: [ScheduleBlock] = []
     ) {
-        var latestDispositionByMission: [
+        var latestDispositionByOccurrence: [
             EntityID: UnresolvedDispositionRecord
         ] = [:]
         for disposition in snapshot.unresolvedDispositions.sorted(by: {
             $0.decidedAt < $1.decidedAt
         }) {
-            latestDispositionByMission[disposition.missionID] = disposition
+            latestDispositionByOccurrence[disposition.scheduleBlockID] =
+                disposition
         }
         var deferredMissionIDs = Set<EntityID>()
         var deferredOccurrenceCounts: [EntityID: Int] = [:]
         var dueWindowOverrides: [EntityID: DueWindow] = [:]
+        var recoveryDueWindows: [EntityID: [DueWindow]] = [:]
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(
             identifier: snapshot.profile.timeZoneIdentifier
         ) ?? .current
-        for (missionID, disposition) in latestDispositionByMission {
+        for disposition in latestDispositionByOccurrence.values.sorted(by: {
+            if $0.decidedAt != $1.decidedAt {
+                return $0.decidedAt < $1.decidedAt
+            }
+            return $0.id < $1.id
+        }) {
+            let missionID = disposition.missionID
             let isRepeatedWorkout = snapshot.approvedWorkouts.contains {
                 $0.isEnabled && $0.missionID == missionID
             }
             let resolvedAfterDisposition = snapshot.completions.contains {
-                $0.missionID == missionID
+                $0.scheduleBlockID == disposition.scheduleBlockID
                     && ($0.status == .completed || $0.status == .partial)
                     && $0.completedAt >= disposition.decidedAt
             }
@@ -107,10 +118,15 @@ public struct PlanningInput: Equatable, Sendable {
                     value: 1,
                     to: calendar.startOfDay(for: disposition.decidedAt)
                 ) ?? disposition.decidedAt.addingTimeInterval(86_400)
-                dueWindowOverrides[missionID] = DueWindow(
+                let window = DueWindow(
                     earliest: disposition.decidedAt,
                     latest: end
                 )
+                if isRepeatedWorkout {
+                    recoveryDueWindows[missionID, default: []].append(window)
+                } else {
+                    dueWindowOverrides[missionID] = window
+                }
             case .moveToTomorrow:
                 let tomorrow = calendar.date(
                     byAdding: .day,
@@ -122,10 +138,15 @@ public struct PlanningInput: Equatable, Sendable {
                     value: 1,
                     to: tomorrow
                 ) ?? tomorrow.addingTimeInterval(86_400)
-                dueWindowOverrides[missionID] = DueWindow(
+                let window = DueWindow(
                     earliest: tomorrow,
                     latest: dayAfter
                 )
+                if isRepeatedWorkout {
+                    recoveryDueWindows[missionID, default: []].append(window)
+                } else {
+                    dueWindowOverrides[missionID] = window
+                }
             case .weeklyBacklog, .drop:
                 if isRepeatedWorkout {
                     deferredOccurrenceCounts[missionID, default: 0] += 1
@@ -152,7 +173,8 @@ public struct PlanningInput: Equatable, Sendable {
             lockedBlocks: lockedBlocks,
             deferredMissionIDs: deferredMissionIDs,
             deferredOccurrenceCounts: deferredOccurrenceCounts,
-            dueWindowOverrides: dueWindowOverrides
+            dueWindowOverrides: dueWindowOverrides,
+            recoveryDueWindows: recoveryDueWindows
         )
     }
 }

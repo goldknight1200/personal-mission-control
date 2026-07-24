@@ -203,9 +203,67 @@ final class CommandMutationApplicatorTests: XCTestCase {
         }
     }
 
+    func testStaleConfirmedSkipIsRejectedAfterPlacementChanges() throws {
+        var snapshot = MissionControlSeed.makeDemo(
+            referenceDate: referenceDate
+        )
+        snapshot.applySchedulingResult(
+            SchedulingEngine().makePlan(
+                input: PlanningInput(
+                    snapshot: snapshot,
+                    currentTime: referenceDate
+                )
+            )
+        )
+        let blockIndex = try XCTUnwrap(
+            snapshot.scheduleBlocks.firstIndex(where: {
+                $0.missionID != nil && $0.kind == .mission
+            })
+        )
+        let originalBlock = snapshot.scheduleBlocks[blockIndex]
+        let missionID = try XCTUnwrap(originalBlock.missionID)
+        let mission = try XCTUnwrap(snapshot.mission(withID: missionID))
+        let command = makeCommand(
+            mutations: [
+                .skipMission(
+                    missionID: missionID,
+                    missionName: mission.title
+                )
+            ],
+            confirmation: .explicit(reasons: ["Consequential"]),
+            affectedScheduleRange: AffectedScheduleRange(
+                start: originalBlock.start,
+                end: originalBlock.end
+            )
+        )
+        snapshot.scheduleBlocks[blockIndex].start = originalBlock.start
+            .addingTimeInterval(60 * 60)
+        snapshot.scheduleBlocks[blockIndex].end = originalBlock.end
+            .addingTimeInterval(60 * 60)
+
+        XCTAssertThrowsError(
+            try CommandMutationApplicator(
+                replanner: RecordingReplanner()
+            ).apply(
+                command,
+                to: snapshot,
+                finalConfirmationProvided: true
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? CommandApplicationError,
+                .staleCommand
+            )
+        }
+        XCTAssertTrue(snapshot.completions.isEmpty)
+        XCTAssertTrue(snapshot.commandHistory.isEmpty)
+    }
+
     private func makeCommand(
         mutations: [ProposedMutation],
-        confirmation: ConfirmationRequirement = .none
+        confirmation: ConfirmationRequirement = .none,
+        affectedScheduleRange: AffectedScheduleRange =
+            AffectedScheduleRange()
     ) -> StructuredCommand {
         StructuredCommand(
             rawTranscript: "raw",
@@ -213,6 +271,7 @@ final class CommandMutationApplicatorTests: XCTestCase {
             detectedIntents: [DetectedIntent(kind: .addTodayItem, confidence: 1)],
             extractedEntities: [],
             proposedMutations: mutations,
+            affectedScheduleRange: affectedScheduleRange,
             confirmationRequirement: confirmation,
             createdAt: referenceDate
         )

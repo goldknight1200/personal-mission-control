@@ -99,4 +99,115 @@ final class SwiftDataMissionControlRepositoryTests: XCTestCase {
         let records = try verifier.fetch(FetchDescriptor<MissionControlStateRecord>())
         XCTAssertEqual(records.first?.schemaVersion, MissionControlSnapshot.currentSchemaVersion)
     }
+
+    @MainActor
+    func testSchemaOneThroughFourMigrationsAreIdempotent() throws {
+        for schemaVersion in 1..<MissionControlSnapshot.currentSchemaVersion {
+            let configuration = ModelConfiguration(
+                isStoredInMemoryOnly: true
+            )
+            let container = try ModelContainer(
+                for: MissionControlStateRecord.self,
+                configurations: configuration
+            )
+            let context = ModelContext(container)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .millisecondsSince1970
+            var snapshot = MissionControlSeed.makeDemo(
+                referenceDate: Date(
+                    timeIntervalSince1970:
+                        50_000 + Double(schemaVersion)
+                )
+            )
+            snapshot.schemaVersion = schemaVersion
+            context.insert(
+                MissionControlStateRecord(
+                    schemaVersion: schemaVersion,
+                    payload: try encoder.encode(snapshot)
+                )
+            )
+            try context.save()
+            let repository = SwiftDataMissionControlRepository(
+                container: container
+            )
+
+            let migrated = try XCTUnwrap(repository.loadSnapshot())
+            let reloaded = try XCTUnwrap(repository.loadSnapshot())
+
+            XCTAssertEqual(
+                migrated.schemaVersion,
+                MissionControlSnapshot.currentSchemaVersion
+            )
+            XCTAssertEqual(reloaded, migrated)
+            let records = try ModelContext(container).fetch(
+                FetchDescriptor<MissionControlStateRecord>()
+            )
+            XCTAssertEqual(records.count, 1)
+            XCTAssertEqual(
+                records.first?.schemaVersion,
+                MissionControlSnapshot.currentSchemaVersion
+            )
+        }
+    }
+
+    @MainActor
+    func testCorruptedPayloadsAreRejectedWithoutBeingOverwritten() throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        let validSnapshot = MissionControlSeed.makeDemo(
+            referenceDate: Date(timeIntervalSince1970: 60_000)
+        )
+        let validPayload = try encoder.encode(validSnapshot)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: validPayload
+            ) as? [String: Any]
+        )
+        var missions = try XCTUnwrap(
+            object["missions"] as? [[String: Any]]
+        )
+        missions[0]["estimatedDurationMinutes"] = -1
+        object["missions"] = missions
+        let semanticCorruption = try JSONSerialization.data(
+            withJSONObject: object
+        )
+        let payloads = [
+            Data(#"{"schemaVersion":5"#.utf8),
+            semanticCorruption
+        ]
+
+        for payload in payloads {
+            let configuration = ModelConfiguration(
+                isStoredInMemoryOnly: true
+            )
+            let container = try ModelContainer(
+                for: MissionControlStateRecord.self,
+                configurations: configuration
+            )
+            let context = ModelContext(container)
+            context.insert(
+                MissionControlStateRecord(
+                    schemaVersion:
+                        MissionControlSnapshot.currentSchemaVersion,
+                    payload: payload
+                )
+            )
+            try context.save()
+            let repository = SwiftDataMissionControlRepository(
+                container: container
+            )
+
+            XCTAssertThrowsError(try repository.loadSnapshot())
+
+            let records = try ModelContext(container).fetch(
+                FetchDescriptor<MissionControlStateRecord>()
+            )
+            XCTAssertEqual(records.count, 1)
+            XCTAssertEqual(records.first?.payload, payload)
+            XCTAssertEqual(
+                records.first?.schemaVersion,
+                MissionControlSnapshot.currentSchemaVersion
+            )
+        }
+    }
 }
