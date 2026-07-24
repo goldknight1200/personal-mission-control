@@ -979,6 +979,10 @@ final class AppModel: ObservableObject {
                 return .rejected("The reported duration is invalid.")
             case .invalidDate:
                 return .rejected("The proposed date or time is no longer valid.")
+            case .staleCommand:
+                return .rejected(
+                    "The schedule changed after this command was reviewed. Review it again."
+                )
             }
         } catch {
             persistenceNotice = "The voice command was not saved. No schedule data changed."
