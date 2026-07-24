@@ -152,10 +152,82 @@ jobs:
           runtime = ".".join(str(value) for value in runtime_version[:2])
           print(f"Selected {name} on iOS {runtime} ({udid})")
 
+          latest_runtime = max(candidate[0] for candidate in candidates)
+          ui_pool = [
+              candidate
+              for candidate in candidates
+              if candidate[0] == latest_runtime
+          ]
+          small = min(
+              ui_pool,
+              key=lambda candidate: (
+                  candidate[2],
+                  candidate[1],
+                  candidate[3],
+                  candidate[4],
+              ),
+          )
+          large = max(
+              ui_pool,
+              key=lambda candidate: (
+                  candidate[2],
+                  candidate[1],
+                  candidate[3],
+                  candidate[4],
+              ),
+          )
+          used_udids = {small[4], large[4]}
+          common_pool = [
+              candidate
+              for candidate in ui_pool
+              if candidate[4] not in used_udids
+              and candidate[2] in (1, 3)
+          ]
+          if not common_pool:
+              common_pool = [
+                  candidate
+                  for candidate in ui_pool
+                  if candidate[4] not in used_udids
+              ]
+          common = max(
+              common_pool,
+              key=lambda candidate: (
+                  candidate[1],
+                  candidate[2],
+                  candidate[3],
+                  candidate[4],
+              ),
+          ) if common_pool else None
+
+          ui_devices = [
+              ("small", small),
+              ("common", common),
+              ("large", large),
+          ]
+          if common is not None:
+              print(
+                  "UI smoke profiles: "
+                  + ", ".join(
+                      f"{label}={device[3]} ({device[4]})"
+                      for label, device in ui_devices
+                  )
+              )
+          else:
+              print(
+                  "::warning title=Three-profile UI smoke unavailable::"
+                  "The newest iOS runtime has fewer than three distinct "
+                  "available iPhone simulators."
+              )
+
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"udid={udid}\n")
               output.write(f"name={name}\n")
               output.write(f"runtime={runtime_id}\n")
+              for label, device in ui_devices:
+                  if device is None:
+                      continue
+                  output.write(f"{label}_udid={device[4]}\n")
+                  output.write(f"{label}_name={device[3]}\n")
           PY
 
       - name: Gate 2 — iOS simulator tests
@@ -173,6 +245,61 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             test 2>&1 \
             | tee Logs/ios-simulator-tests.log
+
+      - name: Debug launch and multi-size UI smoke
+        id: ui_smoke
+        if: >-
+          ${{
+            always()
+            && steps.simulator_tests.outcome == 'success'
+            && steps.simulator.outputs.small_udid != ''
+            && steps.simulator.outputs.common_udid != ''
+            && steps.simulator.outputs.large_udid != ''
+          }}
+        shell: bash
+        env:
+          APP_PATH: DerivedData/Build/Products/Debug-iphonesimulator/PersonalMissionControl.app
+          BUNDLE_ID: com.ethanshahzad.PersonalMissionControl
+        run: |
+          set -euo pipefail
+          mkdir -p Logs UIArtifacts
+          exec > >(tee Logs/ui-smoke.log) 2>&1
+
+          if [[ ! -d "$APP_PATH" ]]; then
+            echo "::error title=Debug app missing::Expected $APP_PATH after simulator tests."
+            exit 1
+          fi
+
+          smoke_profile() {
+            local label="$1"
+            local udid="$2"
+            local name="$3"
+            echo "Launching $label profile: $name ($udid)"
+            xcrun simctl boot "$udid" 2>/dev/null || true
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl uninstall "$udid" "$BUNDLE_ID" 2>/dev/null || true
+            xcrun simctl install "$udid" "$APP_PATH"
+            xcrun simctl status_bar "$udid" override --time "9:41"
+            xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID"
+            sleep 5
+            xcrun simctl io "$udid" screenshot "UIArtifacts/${label}.png"
+            xcrun simctl get_app_container "$udid" "$BUNDLE_ID" app
+            xcrun simctl terminate "$udid" "$BUNDLE_ID"
+            xcrun simctl shutdown "$udid"
+          }
+
+          smoke_profile \
+            "small" \
+            "${{ steps.simulator.outputs.small_udid }}" \
+            "${{ steps.simulator.outputs.small_name }}"
+          smoke_profile \
+            "common" \
+            "${{ steps.simulator.outputs.common_udid }}" \
+            "${{ steps.simulator.outputs.common_name }}"
+          smoke_profile \
+            "large" \
+            "${{ steps.simulator.outputs.large_udid }}" \
+            "${{ steps.simulator.outputs.large_name }}"
 
       - name: Gate 3 — Unsigned Release simulator build
         id: release_build
@@ -203,11 +330,22 @@ jobs:
             echo "| Core Swift package tests | ${{ steps.core_tests.outcome }} |"
             echo "| Simulator selection | ${{ steps.simulator.outcome }} |"
             echo "| iOS simulator tests | ${{ steps.simulator_tests.outcome }} |"
+            echo "| Debug multi-size UI smoke | ${{ steps.ui_smoke.outcome }} |"
             echo "| Unsigned Release build | ${{ steps.release_build.outcome }} |"
             echo
             echo "Simulator: ${{ steps.simulator.outputs.name }}"
             echo "Runtime: ${{ steps.simulator.outputs.runtime }}"
+            echo "UI profiles: ${{ steps.simulator.outputs.small_name }}, ${{ steps.simulator.outputs.common_name }}, ${{ steps.simulator.outputs.large_name }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload UI smoke screenshots
+        if: ${{ always() && steps.ui_smoke.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: UIArtifacts/*.png
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload failure diagnostics
         if: ${{ failure() && steps.checkout.outcome == 'success' }}
@@ -217,5 +355,6 @@ jobs:
           path: |
             Logs/
             TestResults/*.xcresult
+            UIArtifacts/
           if-no-files-found: ignore
           retention-days: 7

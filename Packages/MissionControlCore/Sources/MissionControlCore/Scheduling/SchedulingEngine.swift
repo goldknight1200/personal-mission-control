@@ -584,8 +584,10 @@ private final class Planner {
                     && $0.completedAt >= horizonStart
                     && $0.completedAt < horizonEnd
             }.count
-            let recoveryWindow = input.dueWindowOverrides[mission.id]
-            let scheduledRecoveryCount = recoveryWindow == nil ? 0 : 1
+            let recoveryWindows = input.recoveryDueWindows[mission.id]
+                ?? input.dueWindowOverrides[mission.id].map { [$0] }
+                ?? []
+            let scheduledRecoveryCount = recoveryWindows.count
             let deferredOccurrenceCount =
                 input.deferredOccurrenceCounts[mission.id] ?? 0
             let remainingTarget = max(
@@ -679,7 +681,7 @@ private final class Planner {
                     )
                 )
             }
-            if let recoveryWindow {
+            for (recoveryIndex, recoveryWindow) in recoveryWindows.enumerated() {
                 let recoveryStart = recoveryWindow.earliest ?? horizonStart
                 let recoveryEnd = recoveryWindow.latest ?? horizonEnd
                 let eligibleDays = dayStarts.filter { day in
@@ -690,7 +692,7 @@ private final class Planner {
                     Candidate(
                         mission: mission,
                         routineID: nil,
-                        occurrenceKey: "workout.\(workout.id.rawValue.uuidString).recovery.\(timestampKey(recoveryStart))",
+                        occurrenceKey: "workout.\(workout.id.rawValue.uuidString).recovery.\(timestampKey(recoveryStart)).\(recoveryIndex)",
                         stage: 3,
                         preferredDayStarts: eligibleDays,
                         preferredStartMinute: workout.preferredStartMinute

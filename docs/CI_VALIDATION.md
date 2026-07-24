@@ -71,8 +71,8 @@ failure diagnostics.
 
 ## Validation gates
 
-All three gates are separate named steps and are summarized in the GitHub job
-summary.
+The three required gates and the Debug runtime smoke step are separately named
+and summarized in the GitHub job summary.
 
 ### Gate 1 — Core Swift package tests
 
@@ -116,6 +116,22 @@ xcodebuild \
 
 This validates whole-module Release compilation without code signing.
 
+### Debug runtime and multi-size UI smoke
+
+After the simulator XCTest step produces the Debug app, CI selects three
+distinct iPhone profiles from the newest installed iOS runtime: the smallest
+available profile, a common current profile, and the largest available
+profile. It boots each simulator by UDID, installs a clean app container,
+launches the application, waits for first render, captures a screenshot,
+verifies the installed app container, terminates the app, and shuts down the
+simulator.
+
+The retained `ui-smoke-<run>-<attempt>` artifact contains `small.png`,
+`common.png`, and `large.png`. These screenshots prove clean Debug launch and
+first-frame rendering on representative sizes. They do not replace interactive
+XCUITest, Dynamic Type, VoiceOver, notification delivery, microphone, or
+physical-device validation.
+
 The simulator test and Release gates are allowed to run even if the core gate
 fails, so one CI run can expose independent failures without spending on a
 second macOS job.
@@ -135,6 +151,7 @@ Swift or Xcode result. On failure, CI uploads a seven-day artifact containing
 only:
 
 - core, simulator-test, Release-build, and simulator-inventory logs;
+- Debug launch/UI-smoke logs and any screenshots created before failure;
 - generated `.xcresult` bundles that exist.
 
 `DerivedData`, `.build`, app bundles, and other large generated folders are not
