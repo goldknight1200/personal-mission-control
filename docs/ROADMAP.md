@@ -4,7 +4,8 @@ Each phase begins with an audit of the prior acceptance criteria. Later phases e
 
 ## Phase 1 — Local vertical slice
 
-Implementation status: complete in source as of 2026-07-23; macOS/Xcode build, simulator, and device validation remain pending.
+Implementation status: complete in source. macOS/Xcode build and simulator
+validation passed on 2026-07-24; physical-device validation remains pending.
 
 Implement the core domain model, SwiftData adapter, app navigation, editable seed profile, structured sample inputs, and minimal execution-focused Home experience.
 
@@ -20,8 +21,8 @@ Acceptance criteria:
 
 ## Phase 2 — Deterministic scheduling and replanning
 
-Implementation status: complete in source as of 2026-07-24; macOS/Xcode build,
-simulator, and physical-device validation remain pending.
+Implementation status: complete in source. macOS/Xcode build and simulator
+validation passed on 2026-07-24; physical-device validation remains pending.
 
 Implement the seven-day staged planner, detailed current-day timeline, explainable decisions, conflict reporting, and minimal-change replanning.
 
@@ -36,8 +37,9 @@ Acceptance criteria:
 
 ## Phase 3 — Voice review and command pipeline
 
-Implementation status: complete in source as of 2026-07-24; macOS/Xcode,
-simulator microphone, and physical-device speech validation remain pending.
+Implementation status: complete in source. macOS/Xcode build, simulator tests,
+and Debug launch smoke passed on 2026-07-24; live microphone and
+physical-device Speech validation remain pending.
 Schedule-affecting commands feed confirmed typed requests to the deterministic
 Phase 2 replanner.
 
@@ -54,8 +56,9 @@ Acceptance criteria:
 
 ## Phase 4 — Notifications, recovery, history, and consistency
 
-Implementation status: complete in source as of 2026-07-24; macOS/Xcode,
-simulator notification-action, and physical-device validation remain pending.
+Implementation status: complete in source. macOS/Xcode build, simulator tests,
+and Debug launch smoke passed on 2026-07-24; on-device notification delivery,
+notification actions, and physical-device validation remain pending.
 Recovery operations use the deterministic Phase 2 replanner after explicit
 decisions.
 
