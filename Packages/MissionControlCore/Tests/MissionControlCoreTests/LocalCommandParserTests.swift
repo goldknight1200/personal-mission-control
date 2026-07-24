@@ -103,7 +103,17 @@ final class LocalCommandParserTests: XCTestCase {
 
     func testInferredShiftYearAndFixedCommitmentConflictAreExplicit() {
         let inferredYear = parse("Work shift on 28 July from 12:00 to 20:00.")
-        let conflict = parse("Work shift on 2026-07-25 from 10:00 to 12:00.")
+        let conflict = parse(
+            "Work shift on 2026-07-25 from 10:00 to 12:00.",
+            fixedCommitments: [
+                FixedCommitment(
+                    title: "Existing appointment",
+                    category: .personal,
+                    start: localDate(2026, 7, 25, 11),
+                    end: localDate(2026, 7, 25, 13)
+                )
+            ]
+        )
 
         XCTAssertTrue(inferredYear.confirmationRequirement.isRequired)
         XCTAssertTrue(inferredYear.warnings.contains(where: {
@@ -159,15 +169,37 @@ final class LocalCommandParserTests: XCTestCase {
         )
     }
 
-    private func parse(_ transcript: String) -> StructuredCommand {
-        parser.interpret(
+    private func parse(
+        _ transcript: String,
+        fixedCommitments: [FixedCommitment] = []
+    ) -> StructuredCommand {
+        var snapshot = MissionControlSeed.makeDemo(referenceDate: referenceDate)
+        snapshot.fixedCommitments = fixedCommitments
+        return parser.interpret(
             rawTranscript: transcript,
             confirmedTranscript: transcript,
             context: CommandContext(
-                snapshot: MissionControlSeed.makeDemo(referenceDate: referenceDate),
+                snapshot: snapshot,
                 referenceDate: referenceDate
             )
         )
+    }
+
+    private func localDate(
+        _ year: Int,
+        _ month: Int,
+        _ day: Int,
+        _ hour: Int
+    ) -> Date {
+        berlinCalendar.date(
+            from: DateComponents(
+                timeZone: berlinCalendar.timeZone,
+                year: year,
+                month: month,
+                day: day,
+                hour: hour
+            )
+        )!
     }
 
     private var referenceDate: Date {

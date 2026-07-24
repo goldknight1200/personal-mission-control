@@ -156,7 +156,7 @@ struct PlanView: View {
             value: 1,
             to: start
         ) ?? start.addingTimeInterval(86_400)
-        model.snapshot.scheduleBlocks
+        return model.snapshot.scheduleBlocks
             .filter { $0.start < end && $0.end > start }
             .sorted(by: { $0.start < $1.start })
     }
