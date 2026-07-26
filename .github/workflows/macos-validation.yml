@@ -399,7 +399,6 @@ jobs:
           PY
             then
               echo "::error title=Simulator boot timed out::$name ($udid) did not become ready within 180 seconds."
-              xcrun simctl list devices
               return 1
             fi
             xcrun simctl uninstall "$udid" "$BUNDLE_ID" 2>/dev/null || true
