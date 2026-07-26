@@ -221,7 +221,6 @@ struct MissionControlShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: AddTaskIntent(),
             phrases: [
-                "Add \(\.$task) in \(.applicationName)",
                 "Add an item in \(.applicationName)"
             ],
             shortTitle: "Add task",
@@ -230,7 +229,6 @@ struct MissionControlShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: AddShoppingItemIntent(),
             phrases: [
-                "Add \(\.$item) to \(.applicationName)",
                 "Add groceries in \(.applicationName)"
             ],
             shortTitle: "Add shopping item",

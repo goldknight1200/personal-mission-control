@@ -333,6 +333,7 @@ public struct WorkShiftBatchParser: Sendable {
         _ text: String
     ) -> (hour: Int, minute: Int, meridiem: String?)? {
         let cleaned = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .replacingOccurrences(of: ".", with: ":")
             .replacingOccurrences(of: " ", with: "")
