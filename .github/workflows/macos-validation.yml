@@ -384,15 +384,20 @@ jobs:
             local name="$3"
             echo "Launching $label profile: $name ($udid)"
             xcrun simctl boot "$udid" 2>/dev/null || true
-            local is_booted=0
-            for _ in {1..90}; do
-              if xcrun simctl bootstatus "$udid" >/dev/null 2>&1; then
-                is_booted=1
-                break
-              fi
-              sleep 2
-            done
-            if [[ "$is_booted" -ne 1 ]]; then
+            if ! python3 - "$udid" <<'PY'
+          import subprocess
+          import sys
+
+          try:
+              subprocess.run(
+                  ["xcrun", "simctl", "bootstatus", sys.argv[1], "-b"],
+                  check=True,
+                  timeout=180,
+              )
+          except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+              sys.exit(1)
+          PY
+            then
               echo "::error title=Simulator boot timed out::$name ($udid) did not become ready within 180 seconds."
               xcrun simctl list devices
               return 1
