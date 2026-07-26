@@ -103,8 +103,8 @@ final class PhaseSixNutritionTests: XCTestCase {
             )
         )
 
-        XCTAssertFalse(result.blocks.contains {
-            $0.kind == .meal && $0.title.contains("food deficit")
+        XCTAssertFalse(result.generatedMissions.contains {
+            $0.nutritionPlanningNeedID == needID
         })
     }
 
@@ -148,6 +148,9 @@ final class PhaseSixNutritionTests: XCTestCase {
 
     func testLikelyInventoryShortageAddsOneLinkedShoppingProposal() throws {
         var snapshot = emptyNutritionSnapshot()
+        snapshot.profile.nutritionTargets.approximateCalories = 0
+        snapshot.profile.nutritionTargets.approximateProteinGrams = 0
+        snapshot.profile.nutritionTargets.substantialMeals = 0
         let chicken = InventoryItem(
             name: "Chicken",
             state: .available,

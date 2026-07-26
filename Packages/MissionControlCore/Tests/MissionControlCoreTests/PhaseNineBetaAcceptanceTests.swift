@@ -130,14 +130,17 @@ final class PhaseNineBetaAcceptanceTests: XCTestCase {
             snapshot: snapshot,
             requests: [lateWake]
         )
-        XCTAssertTrue(
-            snapshot.scheduleBlocks.filter {
+        let remainingTuesdayMissions = snapshot.scheduleBlocks.filter {
                 $0.kind == .mission
                     && calendar.isDate(
                         $0.start,
                         inSameDayAs: localDate(2026, 7, 28, 12, 0)
                     )
-            }.allSatisfy {
+                    && $0.end > lateWake.requestedAt
+            }
+        XCTAssertFalse(remainingTuesdayMissions.isEmpty)
+        XCTAssertTrue(
+            remainingTuesdayMissions.allSatisfy {
                 $0.start >= localDate(2026, 7, 28, 11, 0)
             }
         )
@@ -241,12 +244,17 @@ final class PhaseNineBetaAcceptanceTests: XCTestCase {
     private func assertCoherent(
         _ snapshot: MissionControlSnapshot
     ) throws {
-        XCTAssertTrue(SnapshotIntegrityValidator.issues(in: snapshot).isEmpty)
+        let issues = SnapshotIntegrityValidator.issues(in: snapshot)
+        XCTAssertTrue(
+            issues.isEmpty,
+            issues.map(\.message).joined(separator: "\n")
+        )
         for commitment in snapshot.fixedCommitments {
             let block = try XCTUnwrap(
                 snapshot.scheduleBlocks.first(where: {
                     $0.fixedCommitmentID == commitment.id
-                })
+                }),
+                "Missing schedule block for fixed commitment \(commitment.title)"
             )
             XCTAssertEqual(block.start, commitment.start)
             XCTAssertEqual(block.end, commitment.end)

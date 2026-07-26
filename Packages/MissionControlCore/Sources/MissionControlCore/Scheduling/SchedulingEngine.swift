@@ -124,7 +124,8 @@ private final class Planner {
 
     private func loadLockedBlocks() {
         for block in input.lockedBlocks
-        where intersectsHorizon(block.start, block.end) {
+        where intersectsHorizon(block.start, block.end)
+            || block.end <= input.currentTime {
             guard !blocks.contains(where: { $0.id == block.id }) else {
                 continue
             }
@@ -1618,6 +1619,11 @@ private final class Planner {
                 previousStart: existing.start,
                 newStart: existing.start
             )
+            addWorkoutPainDecision(
+                for: candidate,
+                blockID: existing.id,
+                start: existing.start
+            )
             return
         }
 
@@ -1699,18 +1705,31 @@ private final class Planner {
                 newStart: missionStart
             )
         }
-        if let workout = candidate.workout,
-           !workout.blockedExerciseIDs.isEmpty {
-            addDecision(
-                kind: .recoveryAdjusted,
-                rule: .painRestriction,
-                missionID: candidate.mission.id,
-                blockID: missionBlock?.id,
-                title: candidate.mission.title,
-                explanation: "\(workout.blockedExerciseIDs.count) materially affected exercise\(workout.blockedExerciseIDs.count == 1 ? " was" : "s were") kept out of this occurrence. The approved template was not changed.",
-                newStart: missionStart
-            )
+        addWorkoutPainDecision(
+            for: candidate,
+            blockID: missionBlock?.id,
+            start: missionStart
+        )
+    }
+
+    private func addWorkoutPainDecision(
+        for candidate: Candidate,
+        blockID: EntityID?,
+        start: Date
+    ) {
+        guard let workout = candidate.workout,
+              !workout.blockedExerciseIDs.isEmpty else {
+            return
         }
+        addDecision(
+            kind: .recoveryAdjusted,
+            rule: .painRestriction,
+            missionID: candidate.mission.id,
+            blockID: blockID,
+            title: candidate.mission.title,
+            explanation: "\(workout.blockedExerciseIDs.count) materially affected exercise\(workout.blockedExerciseIDs.count == 1 ? " was" : "s were") kept out of this occurrence. The approved template was not changed.",
+            newStart: start
+        )
     }
 
     private func findMissionStart(for candidate: Candidate) -> Date? {

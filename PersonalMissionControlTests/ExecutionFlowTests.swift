@@ -16,7 +16,7 @@ final class ExecutionFlowTests: XCTestCase {
                 }
                 return MissionExecution.skipAssessment(
                     for: mission
-                ).requiresConfirmation
+                ).requiresConfirmation && block.start >= date
             })
         )
         let missionID = try XCTUnwrap(block.missionID)
@@ -46,14 +46,20 @@ final class ExecutionFlowTests: XCTestCase {
             model.snapshot.completions.first(where: {
                 $0.scheduleBlockID == block.id
             })?.status,
-            .skipped
+            .skipped,
+            "The confirmed occurrence was not recorded as skipped."
         )
         XCTAssertFalse(
             model.snapshot.scheduleBlocks.contains(where: {
                 $0.id == block.id && $0.end > date
-            })
+            }),
+            "The skipped occurrence remained active after replanning."
         )
-        XCTAssertEqual(model.snapshot.replanRequests.last?.reason, .missionSkipped)
+        XCTAssertEqual(
+            model.snapshot.replanRequests.last?.reason,
+            .missionSkipped,
+            "The confirmed skip did not remain the terminal replan reason."
+        )
     }
 
     @MainActor
@@ -111,12 +117,21 @@ final class ExecutionFlowTests: XCTestCase {
                 $0.scheduleBlockID == block.id
             })
         )
-        XCTAssertEqual(record.status, .partial)
-        XCTAssertEqual(record.actualDurationMinutes, 10)
+        XCTAssertEqual(
+            record.status,
+            .partial,
+            "The resolved occurrence was not retained as partial."
+        )
+        XCTAssertEqual(
+            record.actualDurationMinutes,
+            10,
+            "Elapsed time was not measured from the corrected actual start."
+        )
         XCTAssertFalse(
             model.snapshot.scheduleBlocks.contains(where: {
                 $0.id == block.id && $0.end > partialAt
-            })
+            }),
+            "The partially completed occurrence still extends beyond its actual end."
         )
     }
 
