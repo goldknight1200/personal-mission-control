@@ -887,6 +887,92 @@ final class SchedulingEngineTests: XCTestCase {
         assertNoOverlaps(recalculated.blocks)
     }
 
+    func testSimultaneousWorkoutRecoveryDispositionsRemainOccurrenceScoped() throws {
+        let gym = Mission(
+            category: .gym,
+            title: "Approved workout",
+            rigidity: .protected,
+            estimatedDurationMinutes: 60
+        )
+        let workout = ApprovedWorkout(
+            missionID: gym.id,
+            preferredWeekdays: [
+                .monday,
+                .wednesday,
+                .friday,
+                .sunday
+            ],
+            weeklySessionTarget: 4,
+            preferredStartMinute: 16 * 60
+        )
+        var input = makeInput(missions: [gym])
+        input.approvedWorkouts = [workout]
+        let first = SchedulingEngine().makePlan(input: input)
+        let sourceBlocks = first.blocks.filter {
+            $0.missionID == gym.id && $0.kind == .mission
+        }
+        .sorted(by: { $0.start < $1.start })
+        let moved = try XCTUnwrap(sourceBlocks.first)
+        let backlogged = try XCTUnwrap(sourceBlocks.dropFirst().first)
+        let completions = [moved, backlogged].map {
+            CompletionRecord(
+                missionID: gym.id,
+                scheduleBlockID: $0.id,
+                status: .skipped,
+                completedAt: $0.start,
+                plannedDurationMinutes: $0.durationMinutes,
+                actualDurationMinutes: 0
+            )
+        }
+        let snapshot = MissionControlSnapshot(
+            profile: input.profile,
+            missions: [gym],
+            scheduleBlocks: first.blocks,
+            completions: completions,
+            unresolvedDispositions: [
+                UnresolvedDispositionRecord(
+                    missionID: gym.id,
+                    scheduleBlockID: moved.id,
+                    disposition: .moveToTomorrow,
+                    decidedAt: moved.start
+                ),
+                UnresolvedDispositionRecord(
+                    missionID: gym.id,
+                    scheduleBlockID: backlogged.id,
+                    disposition: .weeklyBacklog,
+                    decidedAt: backlogged.start
+                )
+            ],
+            approvedWorkouts: [workout]
+        )
+        let collisionInput = PlanningInput(
+            snapshot: snapshot,
+            currentTime: current
+        )
+
+        XCTAssertEqual(
+            collisionInput.recoveryDueWindows[gym.id]?.count,
+            1
+        )
+        XCTAssertEqual(
+            collisionInput.deferredOccurrenceCounts[gym.id],
+            1
+        )
+
+        let recalculated = SchedulingEngine().makePlan(
+            input: collisionInput
+        )
+        let updated = recalculated.blocks.filter {
+            $0.missionID == gym.id && $0.kind == .mission
+        }
+
+        XCTAssertEqual(updated.count, 3)
+        XCTAssertEqual(Set(updated.map(\.id)).count, updated.count)
+        XCTAssertFalse(updated.contains(where: { $0.id == moved.id }))
+        XCTAssertFalse(updated.contains(where: { $0.id == backlogged.id }))
+        assertNoOverlaps(recalculated.blocks)
+    }
+
     private func makeInput(
         currentTime: Date? = nil,
         projects: [Project] = [],

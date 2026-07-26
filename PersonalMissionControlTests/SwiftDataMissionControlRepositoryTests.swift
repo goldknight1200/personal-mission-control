@@ -36,6 +36,161 @@ final class SwiftDataMissionControlRepositoryTests: XCTestCase {
     }
 
     @MainActor
+    func testSemanticallyCorruptedPayloadIsRejectedWithoutOverwrite()
+        throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: MissionControlStateRecord.self,
+            configurations: configuration
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        let snapshot = MissionControlSeed.makeDemo(
+            referenceDate: Date(timeIntervalSince1970: 36_000)
+        )
+        let encoded = try encoder.encode(snapshot)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        var missions = try XCTUnwrap(
+            object["missions"] as? [[String: Any]]
+        )
+        missions[0]["estimatedDurationMinutes"] = -1
+        object["missions"] = missions
+        let corruptedPayload = try JSONSerialization.data(
+            withJSONObject: object
+        )
+        let writer = ModelContext(container)
+        writer.insert(
+            MissionControlStateRecord(payload: corruptedPayload)
+        )
+        try writer.save()
+        let repository = SwiftDataMissionControlRepository(container: container)
+
+        XCTAssertThrowsError(try repository.loadSnapshot()) { error in
+            XCTAssertEqual(
+                error as? MissionControlPersistenceError,
+                .invalidSnapshot
+            )
+        }
+
+        let verifier = ModelContext(container)
+        let record = try XCTUnwrap(
+            verifier.fetch(
+                FetchDescriptor<MissionControlStateRecord>()
+            ).first
+        )
+        XCTAssertEqual(record.payload, corruptedPayload)
+    }
+
+    @MainActor
+    func testMalformedPayloadIsRejectedWithoutOverwrite() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: MissionControlStateRecord.self,
+            configurations: configuration
+        )
+        let malformedPayload = Data(#"{"schemaVersion":10"#.utf8)
+        let writer = ModelContext(container)
+        writer.insert(
+            MissionControlStateRecord(payload: malformedPayload)
+        )
+        try writer.save()
+        let repository = SwiftDataMissionControlRepository(container: container)
+
+        XCTAssertThrowsError(try repository.loadSnapshot())
+
+        let verifier = ModelContext(container)
+        let record = try XCTUnwrap(
+            verifier.fetch(
+                FetchDescriptor<MissionControlStateRecord>()
+            ).first
+        )
+        XCTAssertEqual(record.payload, malformedPayload)
+    }
+
+    @MainActor
+    func testMismatchedRecordAndPayloadSchemaIsRejected() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: MissionControlStateRecord.self,
+            configurations: configuration
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        var snapshot = MissionControlSeed.makeDemo(
+            referenceDate: Date(timeIntervalSince1970: 37_000)
+        )
+        snapshot.schemaVersion = 9
+        let writer = ModelContext(container)
+        writer.insert(
+            MissionControlStateRecord(
+                schemaVersion: 10,
+                payload: try encoder.encode(snapshot)
+            )
+        )
+        try writer.save()
+        let repository = SwiftDataMissionControlRepository(container: container)
+
+        XCTAssertThrowsError(try repository.loadSnapshot()) { error in
+            XCTAssertEqual(
+                error as? MissionControlPersistenceError,
+                .invalidSnapshot
+            )
+        }
+    }
+
+    @MainActor
+    func testEveryStoredSchemaMigrationIsIdempotent() throws {
+        for schemaVersion in 1..<MissionControlSnapshot.currentSchemaVersion {
+            let configuration = ModelConfiguration(
+                isStoredInMemoryOnly: true
+            )
+            let container = try ModelContainer(
+                for: MissionControlStateRecord.self,
+                configurations: configuration
+            )
+            let writer = ModelContext(container)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .millisecondsSince1970
+            var snapshot = MissionControlSeed.makeDemo(
+                referenceDate: Date(
+                    timeIntervalSince1970:
+                        50_000 + Double(schemaVersion)
+                )
+            )
+            snapshot.schemaVersion = schemaVersion
+            writer.insert(
+                MissionControlStateRecord(
+                    schemaVersion: schemaVersion,
+                    payload: try encoder.encode(snapshot)
+                )
+            )
+            try writer.save()
+            let repository = SwiftDataMissionControlRepository(
+                container: container
+            )
+
+            let migrated = try XCTUnwrap(repository.loadSnapshot())
+            let reloaded = try XCTUnwrap(repository.loadSnapshot())
+
+            XCTAssertEqual(
+                migrated.schemaVersion,
+                MissionControlSnapshot.currentSchemaVersion
+            )
+            XCTAssertEqual(reloaded, migrated)
+            let records = try ModelContext(container).fetch(
+                FetchDescriptor<MissionControlStateRecord>()
+            )
+            XCTAssertEqual(records.count, 1)
+            XCTAssertEqual(
+                records.first?.schemaVersion,
+                MissionControlSnapshot.currentSchemaVersion
+            )
+        }
+    }
+
+    @MainActor
     func testEmptyStoreReturnsNilThenRoundTripsSnapshot() throws {
         let repository = try SwiftDataMissionControlRepository(isStoredInMemoryOnly: true)
         let snapshot = MissionControlSeed.makeDemo(referenceDate: Date(timeIntervalSince1970: 20_000))

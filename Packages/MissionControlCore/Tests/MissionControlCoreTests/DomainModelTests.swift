@@ -54,6 +54,39 @@ final class DomainModelTests: XCTestCase {
         XCTAssertEqual(snapshot.routines.first?.recurrence.interval, 2)
     }
 
+    func testRemovingMissionClearsActiveWorkoutProjection() {
+        let mission = Mission(
+            category: .gym,
+            title: "Approved session",
+            rigidity: .protected,
+            estimatedDurationMinutes: 60
+        )
+        var snapshot = MissionControlSeed.makeFresh(
+            referenceDate: Date(timeIntervalSince1970: 4_600)
+        )
+        snapshot.missions = [mission]
+        snapshot.approvedWorkouts = [
+            ApprovedWorkout(missionID: mission.id)
+        ]
+
+        snapshot.removeMission(id: mission.id)
+
+        XCTAssertTrue(snapshot.missions.isEmpty)
+        XCTAssertTrue(snapshot.approvedWorkouts.isEmpty)
+    }
+
+    func testRemovingMealTemplateClearsMissionReference() throws {
+        var snapshot = MissionControlSeed.makeDemo(
+            referenceDate: Date(timeIntervalSince1970: 4_650)
+        )
+        let template = try XCTUnwrap(snapshot.mealTemplates.first)
+        snapshot.missions[0].mealTemplateID = template.id
+
+        snapshot.removeMealTemplate(id: template.id)
+
+        XCTAssertNil(snapshot.missions[0].mealTemplateID)
+    }
+
     func testLegacyPlanningPolicyReceivesEditableSleepDefaults() throws {
         let encoded = try JSONEncoder().encode(PlanningPolicy.baseline)
         var object = try XCTUnwrap(

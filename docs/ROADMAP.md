@@ -4,7 +4,9 @@ Each phase begins with an audit of the prior acceptance criteria. Later phases e
 
 ## Phase 1 — Local vertical slice
 
-Implementation status: complete in source as of 2026-07-23; macOS/Xcode build, simulator, and device validation remain pending.
+Audited completion status as of 2026-07-26: **Complete with risks**.
+The intended source is present; current macOS/Xcode build, simulator, and
+physical-device validation remain pending.
 
 Implement the core domain model, SwiftData adapter, app navigation, editable seed profile, structured sample inputs, and minimal execution-focused Home experience.
 
@@ -20,8 +22,9 @@ Acceptance criteria:
 
 ## Phase 2 — Deterministic scheduling and replanning
 
-Implementation status: complete in source as of 2026-07-24; macOS/Xcode build,
-simulator, and physical-device validation remain pending.
+Audited completion status as of 2026-07-26: **Complete with risks**.
+The intended source is present; recovered planner/replanning corrections,
+macOS/Xcode build, simulator, and physical-device validation remain pending.
 
 Implement the seven-day staged planner, detailed current-day timeline, explainable decisions, conflict reporting, and minimal-change replanning.
 
@@ -36,8 +39,9 @@ Acceptance criteria:
 
 ## Phase 3 — Voice review and command pipeline
 
-Implementation status: complete in source as of 2026-07-24; macOS/Xcode,
-simulator microphone, and physical-device speech validation remain pending.
+Audited completion status as of 2026-07-26: **Complete with risks**.
+The intended source is present; macOS/Xcode, simulator microphone, and
+physical-device Speech validation remain pending.
 Schedule-affecting commands feed confirmed typed requests to the deterministic
 Phase 2 replanner.
 
@@ -54,7 +58,8 @@ Acceptance criteria:
 
 ## Phase 4 — Notifications, recovery, history, and consistency
 
-Implementation status: complete in source as of 2026-07-24; macOS/Xcode,
+Audited completion status as of 2026-07-26: **Complete with risks**.
+The intended source is present; notification adapter corrections, macOS/Xcode,
 simulator notification-action, and physical-device validation remain pending.
 Recovery operations use the deterministic Phase 2 replanner after explicit
 decisions.
@@ -72,8 +77,9 @@ Acceptance criteria:
 
 ## Phase 5 — Goals, projects, lists, routines, shopping, and shifts
 
-Implementation status: complete in source as of 2026-07-25; macOS/Xcode build,
-simulator voice capture, and physical-device validation remain pending.
+Audited completion status as of 2026-07-26: **Complete with risks**.
+The intended source is present; macOS/Xcode build, simulator management/voice
+flows, and physical-device validation remain pending.
 
 Build complete management flows for structured work and recurring responsibilities.
 
@@ -88,8 +94,9 @@ Acceptance criteria:
 
 ## Phase 6 — Nutrition and food inventory
 
-Implementation status: complete in source as of 2026-07-26; macOS/Xcode build,
-simulator voice capture, and physical-device validation remain pending.
+Audited completion status as of 2026-07-26: **Complete with risks**.
+The intended source is present; macOS/Xcode build, simulator management flows,
+and physical-device validation remain pending.
 
 Implement nutrition targets, meal templates/plans, low-friction inventory, shortage prediction, and meal/shopping scheduling.
 
@@ -103,8 +110,9 @@ Acceptance criteria:
 
 ## Phase 7 — Workout execution and recovery constraints
 
-Implementation status: complete in source as of 2026-07-26; macOS/Xcode build,
-simulator rest-timer interaction, and physical-device validation remain
+Audited completion status as of 2026-07-26: **Complete with risks**.
+The intended source is present; occurrence-recovery corrections, macOS/Xcode
+build, simulator rest-timer interaction, and physical-device validation remain
 pending.
 
 Implement user-approved programs, session execution, set/rest state, logs, and recovery-aware scheduling.
@@ -119,7 +127,8 @@ Acceptance criteria:
 
 ## Phase 8 — Apple platform integrations
 
-Implementation status: complete in source as of 2026-07-26; macOS/Xcode build,
+Audited completion status as of 2026-07-26: **Partial**.
+Concrete adapters and core tests are present; current macOS/Xcode compilation,
 simulator, signed-device entitlement, Siri, Calendar, and Health validation
 remain pending.
 
@@ -136,10 +145,11 @@ Acceptance criteria:
 
 ## Phase 9 — Optional AI/OCR, hardening, privacy, and beta
 
-Implementation status: complete in source as of 2026-07-26; macOS/Xcode build,
-simulator, signed-device, configured-provider, accessibility, performance,
-TestFlight, and full beta validation remain pending. Production readiness is
-not claimed.
+Audited completion status as of 2026-07-26: **Partial**.
+Substantial optional AI/OCR and hardening source is present; current
+macOS/Xcode build, simulator, signed-device, configured-provider,
+accessibility, performance, TestFlight, and full beta validation remain
+pending. Production readiness is not claimed.
 
 Add an optional minimal-context AI interpreter, optional shift-image extraction, production hardening, privacy controls, and beta readiness.
 

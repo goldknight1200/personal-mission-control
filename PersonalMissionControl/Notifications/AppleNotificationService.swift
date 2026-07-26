@@ -14,7 +14,8 @@ private enum NotificationIdentifier {
 }
 
 @MainActor
-final class AppleNotificationService: NSObject, NotificationService {
+final class AppleNotificationService: NSObject, NotificationService,
+    UNUserNotificationCenterDelegate {
     var actionHandler: ((MissionNotificationAction) -> Void)? {
         didSet {
             deliverBufferedActions()
@@ -176,7 +177,7 @@ final class AppleNotificationService: NSObject, NotificationService {
             ),
             let stageValue = request.content.userInfo[NotificationIdentifier.stage] as? String,
             let stage = MissionNotificationStage(rawValue: stageValue),
-            let fireDate = request.trigger?.nextTriggerDate()
+            let fireDate = nextTriggerDate(for: request.trigger)
         else {
             return nil
         }
@@ -189,6 +190,18 @@ final class AppleNotificationService: NSObject, NotificationService {
             title: request.content.title,
             body: request.content.body
         )
+    }
+
+    nonisolated private static func nextTriggerDate(
+        for trigger: UNNotificationTrigger?
+    ) -> Date? {
+        if let trigger = trigger as? UNTimeIntervalNotificationTrigger {
+            return trigger.nextTriggerDate()
+        }
+        if let trigger = trigger as? UNCalendarNotificationTrigger {
+            return trigger.nextTriggerDate()
+        }
+        return nil
     }
 
     nonisolated private static func action(

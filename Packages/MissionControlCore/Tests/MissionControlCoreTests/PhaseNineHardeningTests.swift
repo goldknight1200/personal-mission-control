@@ -192,6 +192,54 @@ final class PhaseNineHardeningTests: XCTestCase {
         XCTAssertNotEqual(before, after)
     }
 
+    func testCommandContextRevisionIncludesEveryMissionOccurrence()
+        throws {
+        var snapshot = MissionControlSeed.makeFresh(referenceDate: now)
+        let mission = Mission(
+            category: .gym,
+            title: "Repeated workout",
+            rigidity: .flexible,
+            estimatedDurationMinutes: 60,
+            minimumUsefulBlockMinutes: 45
+        )
+        snapshot.missions = [mission]
+        snapshot.scheduleBlocks = [
+            ScheduleBlock(
+                missionID: mission.id,
+                title: mission.title,
+                category: mission.category,
+                kind: .mission,
+                rigidity: mission.rigidity,
+                start: now.addingTimeInterval(3_600),
+                end: now.addingTimeInterval(7_200)
+            ),
+            ScheduleBlock(
+                missionID: mission.id,
+                title: mission.title,
+                category: mission.category,
+                kind: .mission,
+                rigidity: mission.rigidity,
+                start: now.addingTimeInterval(24 * 3_600),
+                end: now.addingTimeInterval(25 * 3_600)
+            )
+        ]
+        let before = CommandContext(
+            snapshot: snapshot,
+            referenceDate: now
+        ).revisionToken
+
+        snapshot.scheduleBlocks[1].start =
+            snapshot.scheduleBlocks[1].start.addingTimeInterval(1_800)
+        snapshot.scheduleBlocks[1].end =
+            snapshot.scheduleBlocks[1].end.addingTimeInterval(1_800)
+
+        let after = CommandContext(
+            snapshot: snapshot,
+            referenceDate: now
+        ).revisionToken
+        XCTAssertNotEqual(before, after)
+    }
+
     func testStrictResponseDecoderRejectsUnexpectedMutationFields()
         throws {
         let data = Data(
@@ -301,6 +349,49 @@ final class PhaseNineHardeningTests: XCTestCase {
         XCTAssertTrue(
             SnapshotIntegrityValidator.issues(in: snapshot).contains(
                 where: { $0.kind == .duplicateIdentifier }
+            )
+        )
+    }
+
+    func testIntegrityValidatorRejectsInvalidDomainValues() {
+        var snapshot = MissionControlSeed.makeDemo(referenceDate: now)
+        snapshot.missions[0].estimatedDurationMinutes = -1
+        snapshot.inventoryItems[0].exactQuantity = -1
+
+        let issues = SnapshotIntegrityValidator.issues(in: snapshot)
+
+        XCTAssertGreaterThanOrEqual(
+            issues.filter { $0.kind == .invalidValue }.count,
+            2
+        )
+    }
+
+    func testIntegrityValidatorRejectsDuplicateNestedIdentifiers()
+        throws {
+        var snapshot = MissionControlSeed.makeDemo(referenceDate: now)
+        let item = try XCTUnwrap(snapshot.checklists[0].items.first)
+        snapshot.checklists[0].items.append(item)
+
+        XCTAssertTrue(
+            SnapshotIntegrityValidator.issues(in: snapshot).contains(
+                where: {
+                    $0.kind == .duplicateIdentifier
+                        && $0.message.contains("checklist items")
+                }
+            )
+        )
+    }
+
+    func testIntegrityValidatorRejectsOrphanedActiveWorkout() throws {
+        var snapshot = MissionControlSeed.makeDemo(referenceDate: now)
+        let workout = try XCTUnwrap(snapshot.approvedWorkouts.first)
+        snapshot.missions.removeAll(where: {
+            $0.id == workout.missionID
+        })
+
+        XCTAssertTrue(
+            SnapshotIntegrityValidator.issues(in: snapshot).contains(
+                where: { $0.kind == .orphanedReference }
             )
         )
     }

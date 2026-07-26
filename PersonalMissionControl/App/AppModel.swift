@@ -1660,7 +1660,7 @@ final class AppModel: ObservableObject {
         usesDurableStorage: Bool = true,
         commandInterpreter: any CommandInterpreting = LocalCommandParser(),
         scheduleReplanner: any ScheduleReplanning = ReplanningEngine(),
-        notificationService: any NotificationService = UnavailableNotificationService(),
+        notificationService: (any NotificationService)? = nil,
         calendarProvider: any CalendarProviding =
             UnavailableCalendarProvider(),
         healthProvider: any HealthContextProviding =
@@ -1677,7 +1677,8 @@ final class AppModel: ObservableObject {
         self.usesDurableStorage = usesDurableStorage
         self.commandInterpreter = commandInterpreter
         self.scheduleReplanner = scheduleReplanner
-        self.notificationService = notificationService
+        self.notificationService =
+            notificationService ?? UnavailableNotificationService()
         self.calendarProvider = calendarProvider
         self.healthProvider = healthProvider
         self.iCalProvider = iCalProvider

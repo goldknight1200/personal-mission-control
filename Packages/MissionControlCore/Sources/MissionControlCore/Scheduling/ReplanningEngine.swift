@@ -149,12 +149,15 @@ public struct ReplanningEngine: ScheduleReplanning {
         affected: DateInterval,
         forcePreservedMissionIDs: Set<EntityID>
     ) -> [ScheduleBlock] {
-        let completedBlockIDs = Set(
-            snapshot.completions.compactMap {
-                guard $0.status == .completed || $0.status == .partial else {
+        let completedBlockIDs: Set<EntityID> = Set(
+            snapshot.completions.compactMap { completion -> EntityID? in
+                guard
+                    completion.status == .completed
+                        || completion.status == .partial
+                else {
                     return nil
                 }
-                return $0.scheduleBlockID
+                return completion.scheduleBlockID
             }
         )
         let inProgressMissionIDs = Set(
@@ -162,8 +165,8 @@ public struct ReplanningEngine: ScheduleReplanning {
                 .filter { $0.status == .inProgress }
                 .map(\.id)
         )
-        var inProgressBlockIDs = Set(
-            snapshot.missionStartRecords.compactMap { record in
+        var inProgressBlockIDs: Set<EntityID> = Set(
+            snapshot.missionStartRecords.compactMap { record -> EntityID? in
                 guard inProgressMissionIDs.contains(record.missionID) else {
                     return nil
                 }
@@ -189,7 +192,7 @@ public struct ReplanningEngine: ScheduleReplanning {
             }
         }
 
-        return snapshot.scheduleBlocks.compactMap { source in
+        return snapshot.scheduleBlocks.compactMap { source -> ScheduleBlock? in
             if source.kind == .freeTime && source.end > currentTime {
                 return nil
             }
@@ -275,16 +278,20 @@ public struct ReplanningEngine: ScheduleReplanning {
         }
         for old in oldPlan
         where old.kind == .mission {
+            guard let missionID = old.missionID else {
+                continue
+            }
+            let matchingIdentity = newMissionBlocks.first(where: {
+                $0.id == old.id
+            })
+            let nearestOccurrence = newMissionBlocks
+                .filter { $0.missionID == missionID }
+                .min(by: {
+                    abs($0.start.timeIntervalSince(old.start))
+                        < abs($1.start.timeIntervalSince(old.start))
+                })
             guard
-                let missionID = old.missionID,
-                let replacement = newMissionBlocks.first(where: {
-                    $0.id == old.id
-                }) ?? newMissionBlocks
-                    .filter { $0.missionID == missionID }
-                    .min(by: {
-                        abs($0.start.timeIntervalSince(old.start))
-                            < abs($1.start.timeIntervalSince(old.start))
-                    }),
+                let replacement = matchingIdentity ?? nearestOccurrence,
                 replacement.start != old.start
             else {
                 continue

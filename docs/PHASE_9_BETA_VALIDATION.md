@@ -1,8 +1,9 @@
 # Phase 9 beta and release validation
 
-Phase 9 is complete in source, not validated as production-ready. The local
-deterministic app remains the only scheduling authority and works with AI and
-OCR disabled.
+Phase 9 is substantially implemented in source, but its audited completion
+status is **Partial** and it is not validated as production-ready. The local
+deterministic app remains the only scheduling authority and is designed to
+work with AI and OCR disabled.
 
 Phase 9 adds no entitlement. PhotosPicker/fileImporter provide explicit
 per-item selection without broad Photo Library authorization or an

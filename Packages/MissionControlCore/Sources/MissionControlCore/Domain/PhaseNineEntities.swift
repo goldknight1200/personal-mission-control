@@ -177,7 +177,9 @@ public enum SnapshotIntegrityIssueKind:
     case unsupportedSchema
     case invalidTimeZone
     case invalidInterval
+    case invalidValue
     case duplicateIdentifier
+    case orphanedReference
 }
 
 public struct SnapshotIntegrityIssue:

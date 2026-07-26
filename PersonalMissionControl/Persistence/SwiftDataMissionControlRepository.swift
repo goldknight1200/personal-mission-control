@@ -65,6 +65,9 @@ final class SwiftDataMissionControlRepository: MissionControlRepository {
             )
         }
         var snapshot = try decoder.decode(MissionControlSnapshot.self, from: record.payload)
+        guard snapshot.schemaVersion == record.schemaVersion else {
+            throw MissionControlPersistenceError.invalidSnapshot
+        }
         guard SnapshotIntegrityValidator.issues(in: snapshot).isEmpty else {
             throw MissionControlPersistenceError.invalidSnapshot
         }

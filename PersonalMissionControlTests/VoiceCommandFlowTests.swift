@@ -157,6 +157,39 @@ final class VoiceCommandFlowTests: XCTestCase {
         XCTAssertEqual(model.snapshot, original)
         XCTAssertNotNil(model.persistenceNotice)
     }
+
+    @MainActor
+    func testRapidNotificationReconciliationsAreSerializedAndRerun()
+        async {
+        let referenceDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let service = BlockingNotificationService()
+        let model = AppModel(
+            repository: InMemoryMissionControlRepository(),
+            referenceDate: referenceDate,
+            notificationService: service
+        )
+
+        let first = Task { @MainActor in
+            await model.prepareActiveExecution()
+        }
+        await service.waitForFirstReconciliation()
+
+        let pending = Task { @MainActor in
+            await model.reconcileNotifications(
+                at: referenceDate.addingTimeInterval(60)
+            )
+        }
+        await pending.value
+
+        XCTAssertEqual(service.reconciliationCount, 1)
+        XCTAssertEqual(service.maximumConcurrentReconciliations, 1)
+
+        service.releaseFirstReconciliation()
+        await first.value
+
+        XCTAssertEqual(service.reconciliationCount, 2)
+        XCTAssertEqual(service.maximumConcurrentReconciliations, 1)
+    }
 }
 
 @MainActor
@@ -231,6 +264,67 @@ private final class FailingSaveRepository: MissionControlRepository {
             throw TestRepositoryError.saveFailed
         }
         self.snapshot = snapshot
+    }
+}
+
+@MainActor
+private final class BlockingNotificationService: NotificationService {
+    var actionHandler: ((MissionNotificationAction) -> Void)?
+    private(set) var reconciliationCount = 0
+    private(set) var maximumConcurrentReconciliations = 0
+
+    private var activeReconciliations = 0
+    private var firstReconciliationWaiters: [
+        CheckedContinuation<Void, Never>
+    ] = []
+    private var firstReconciliationRelease:
+        CheckedContinuation<Void, Never>?
+
+    func authorizationState() async -> NotificationAuthorizationState {
+        .authorized
+    }
+
+    func requestAuthorization() async -> NotificationAuthorizationState {
+        .authorized
+    }
+
+    func pendingMissionNotifications() async
+        -> [MissionNotificationRequest] {
+        []
+    }
+
+    func reconcile(
+        _ reconciliation: NotificationReconciliation
+    ) async throws {
+        reconciliationCount += 1
+        activeReconciliations += 1
+        maximumConcurrentReconciliations = max(
+            maximumConcurrentReconciliations,
+            activeReconciliations
+        )
+        if reconciliationCount == 1 {
+            let waiters = firstReconciliationWaiters
+            firstReconciliationWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+            await withCheckedContinuation { continuation in
+                firstReconciliationRelease = continuation
+            }
+        }
+        activeReconciliations -= 1
+    }
+
+    func waitForFirstReconciliation() async {
+        if reconciliationCount > 0 {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            firstReconciliationWaiters.append(continuation)
+        }
+    }
+
+    func releaseFirstReconciliation() {
+        firstReconciliationRelease?.resume()
+        firstReconciliationRelease = nil
     }
 }
 

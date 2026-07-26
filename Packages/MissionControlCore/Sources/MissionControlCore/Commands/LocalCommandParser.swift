@@ -209,7 +209,7 @@ public struct LocalCommandParser: CommandInterpreting {
         }
 
         let shiftMatches = allMatches(
-            #"(?:work shift|i work)(?: on)? (\d{4}-\d{2}-\d{2}|\d{1,2} [a-z]+(?: \d{4})?) (?:from )?(\d{1,2}[:.]\d{2}) (?:to|-)(\d{1,2}[:.]\d{2})"#,
+            #"(?:work shift|i work)(?: on)? (\d{4}-\d{2}-\d{2}|\d{1,2} [a-z]+(?: \d{4})?) (?:from )?(\d{1,2}[:.]\d{2})\s*(?:to|-)\s*(\d{1,2}[:.]\d{2})"#,
             in: source
         )
         for match in shiftMatches where match.count == 4 {

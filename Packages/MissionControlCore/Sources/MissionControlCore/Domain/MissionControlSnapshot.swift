@@ -473,13 +473,7 @@ public struct MissionControlSnapshot: Codable, Equatable, Sendable {
         let missionIDs = Set(
             missions.filter { $0.projectID == id }.map(\.id)
         )
-        missions.removeAll(where: { missionIDs.contains($0.id) })
-        scheduleBlocks.removeAll(where: {
-            $0.missionID.map(missionIDs.contains) ?? false
-        })
-        manualScheduleAdjustments.removeAll(where: {
-            $0.block.missionID.map(missionIDs.contains) ?? false
-        })
+        removeMissions(withIDs: missionIDs)
     }
 
     public mutating func upsertMission(_ mission: Mission) {
@@ -491,11 +485,7 @@ public struct MissionControlSnapshot: Codable, Equatable, Sendable {
     }
 
     public mutating func removeMission(id: EntityID) {
-        missions.removeAll(where: { $0.id == id })
-        scheduleBlocks.removeAll(where: { $0.missionID == id })
-        manualScheduleAdjustments.removeAll(where: {
-            $0.block.missionID == id
-        })
+        removeMissions(withIDs: [id])
     }
 
     public mutating func upsertRoutine(_ routine: Routine) {
@@ -516,13 +506,7 @@ public struct MissionControlSnapshot: Codable, Equatable, Sendable {
         let missionIDs = Set(
             missions.filter { $0.sourceRoutineID == id }.map(\.id)
         )
-        missions.removeAll(where: { missionIDs.contains($0.id) })
-        scheduleBlocks.removeAll(where: {
-            $0.missionID.map(missionIDs.contains) ?? false
-        })
-        manualScheduleAdjustments.removeAll(where: {
-            $0.block.missionID.map(missionIDs.contains) ?? false
-        })
+        removeMissions(withIDs: missionIDs)
     }
 
     @discardableResult
@@ -593,9 +577,16 @@ public struct MissionControlSnapshot: Codable, Equatable, Sendable {
 
     public mutating func removeMealTemplate(id: EntityID) {
         mealTemplates.removeAll(where: { $0.id == id })
+        for index in missions.indices where missions[index].mealTemplateID == id {
+            missions[index].mealTemplateID = nil
+        }
         for index in plannedMeals.indices
         where plannedMeals[index].mealTemplateID == id {
             plannedMeals[index].mealTemplateID = nil
+        }
+        for index in nutritionPlanningNeeds.indices
+        where nutritionPlanningNeeds[index].suggestedMealTemplateID == id {
+            nutritionPlanningNeeds[index].suggestedMealTemplateID = nil
         }
     }
 
@@ -614,13 +605,7 @@ public struct MissionControlSnapshot: Codable, Equatable, Sendable {
         let missionIDs = Set(
             missions.filter { $0.plannedMealID == id }.map(\.id)
         )
-        missions.removeAll(where: { missionIDs.contains($0.id) })
-        scheduleBlocks.removeAll(where: {
-            $0.missionID.map(missionIDs.contains) ?? false
-        })
-        manualScheduleAdjustments.removeAll(where: {
-            $0.block.missionID.map(missionIDs.contains) ?? false
-        })
+        removeMissions(withIDs: missionIDs)
     }
 
     public mutating func upsertInventoryItem(_ item: InventoryItem) {
@@ -685,6 +670,21 @@ public struct MissionControlSnapshot: Codable, Equatable, Sendable {
         painFlags[index].isActive = false
         painFlags[index].clearedAt = date
         painFlags[index].clearanceNote = note
+    }
+
+    private mutating func removeMissions(
+        withIDs missionIDs: Set<EntityID>
+    ) {
+        missions.removeAll(where: { missionIDs.contains($0.id) })
+        scheduleBlocks.removeAll(where: {
+            $0.missionID.map(missionIDs.contains) ?? false
+        })
+        manualScheduleAdjustments.removeAll(where: {
+            $0.block.missionID.map(missionIDs.contains) ?? false
+        })
+        approvedWorkouts.removeAll(where: {
+            missionIDs.contains($0.missionID)
+        })
     }
 
     private mutating func restockInventory(

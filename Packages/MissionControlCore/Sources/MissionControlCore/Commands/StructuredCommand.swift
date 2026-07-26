@@ -297,7 +297,8 @@ public struct CommandContext: Codable, Equatable, Sendable {
         referenceDate: Date,
         timeZoneIdentifier: String,
         missions: [CommandMissionReference],
-        fixedCommitments: [FixedCommitment]
+        fixedCommitments: [FixedCommitment],
+        scheduleBlocks: [ScheduleBlock] = []
     ) {
         self.referenceDate = referenceDate
         self.timeZoneIdentifier = timeZoneIdentifier
@@ -305,7 +306,8 @@ public struct CommandContext: Codable, Equatable, Sendable {
         self.fixedCommitments = fixedCommitments
         revisionToken = Self.makeRevisionToken(
             missions: missions,
-            fixedCommitments: fixedCommitments
+            fixedCommitments: fixedCommitments,
+            scheduleBlocks: scheduleBlocks
         )
     }
 
@@ -326,13 +328,15 @@ public struct CommandContext: Codable, Equatable, Sendable {
         }
         revisionToken = Self.makeRevisionToken(
             missions: missions,
-            fixedCommitments: fixedCommitments
+            fixedCommitments: fixedCommitments,
+            scheduleBlocks: snapshot.scheduleBlocks
         )
     }
 
     private static func makeRevisionToken(
         missions: [CommandMissionReference],
-        fixedCommitments: [FixedCommitment]
+        fixedCommitments: [FixedCommitment],
+        scheduleBlocks: [ScheduleBlock]
     ) -> String {
         let missionParts = missions.sorted { $0.id < $1.id }.map {
             [
@@ -352,7 +356,23 @@ public struct CommandContext: Codable, Equatable, Sendable {
                 String($0.isExternallyManaged)
             ].joined(separator: ":")
         }
-        let material = (missionParts + ["--fixed--"] + fixedParts)
+        let scheduleParts = scheduleBlocks.sorted { $0.id < $1.id }.map {
+            [
+                $0.id.rawValue.uuidString.lowercased(),
+                $0.missionID?.rawValue.uuidString.lowercased() ?? "",
+                $0.fixedCommitmentID?.rawValue.uuidString.lowercased() ?? "",
+                String($0.start.timeIntervalSince1970),
+                String($0.end.timeIntervalSince1970),
+                String($0.isImmutable)
+            ].joined(separator: ":")
+        }
+        let material = (
+            missionParts
+                + ["--fixed--"]
+                + fixedParts
+                + ["--schedule--"]
+                + scheduleParts
+        )
             .joined(separator: "|")
         var hash: UInt64 = 14_695_981_039_346_656_037
         for byte in material.utf8 {
