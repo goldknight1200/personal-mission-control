@@ -543,7 +543,7 @@ struct AIBehaviorSettingsView: View {
             }
 
             if draft.isEnabled && draft.provider == .customJSON {
-                Section("Provider configuration") {
+                Section {
                     TextField(
                         "HTTPS endpoint",
                         text: $draft.endpointURLString
@@ -577,6 +577,8 @@ struct AIBehaviorSettingsView: View {
                             didSaveCredential = false
                         }
                     }
+                } header: {
+                    Text("Provider configuration")
                 } footer: {
                     Text(
                         "The endpoint must accept the mission-control.command.v1 JSON envelope and return only the documented structured response. HTTP URLs, embedded credentials, query strings, and fragments are rejected. Secrets are never stored in the app snapshot or backup."
@@ -669,7 +671,7 @@ struct PrivacyAndDataSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Privacy") {
+            Section {
                 Toggle(
                     "Retain confirmed command text",
                     isOn: $draft.retainsCommandTranscripts
@@ -687,6 +689,8 @@ struct PrivacyAndDataSettingsView: View {
                     model.updatePrivacySettings(draft)
                     model.handleSignificantTimeChange()
                 }
+            } header: {
+                Text("Privacy")
             } footer: {
                 Text(
                     "Turning transcript retention off immediately replaces existing stored raw and confirmed command text. Structured intents and mutation history remain for consistency and idempotency."
@@ -719,7 +723,7 @@ struct PrivacyAndDataSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section("Dataset") {
+            Section {
                 LabeledContent(
                     "History records",
                     value: "\(model.datasetProfile.historyRecordCount)"
@@ -736,16 +740,20 @@ struct PrivacyAndDataSettingsView: View {
                     "Workout sets",
                     value: "\(model.datasetProfile.workoutSetCount)"
                 )
+            } header: {
+                Text("Dataset")
             } footer: {
                 Text(
                     "These counts expose dataset growth without sending diagnostics. Large-history performance still requires profiling on supported devices."
                 )
             }
 
-            Section("Delete") {
+            Section {
                 Button("Delete all local app data", role: .destructive) {
                     isDeleteConfirmationPresented = true
                 }
+            } header: {
+                Text("Delete")
             } footer: {
                 Text(
                     "Deletion removes the local snapshot and AI credential, then creates an empty local profile. It does not delete events already exported to Apple Calendar or data owned by external providers."

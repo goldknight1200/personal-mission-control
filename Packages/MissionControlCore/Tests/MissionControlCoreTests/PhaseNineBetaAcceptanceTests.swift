@@ -110,7 +110,8 @@ final class PhaseNineBetaAcceptanceTests: XCTestCase {
                     == false
         )
         for need in snapshot.nutritionPlanningNeeds
-        where need.clearDeficit && !need.suggestionDeclined {
+        where need.clearDeficit
+            && need.suggestionDisposition != .declined {
             XCTAssertTrue(
                 snapshot.missions.contains(where: {
                     $0.nutritionPlanningNeedID == need.id

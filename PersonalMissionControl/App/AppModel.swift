@@ -2471,7 +2471,10 @@ final class AppModel: ObservableObject {
                 "The plan changed after this proposal was prepared. Send the command again to review current consequences."
             )
         }
-        applyPreparedCommand(command, finalConfirmationProvided: true)
+        return applyPreparedCommand(
+            command,
+            finalConfirmationProvided: true
+        )
     }
 
     private func applyPreparedCommand(

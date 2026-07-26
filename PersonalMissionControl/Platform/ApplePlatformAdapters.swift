@@ -798,7 +798,8 @@ struct VisionWorkShiftImageTextRecognizer:
                     }
                     return $0.boundingBox.minX < $1.boundingBox.minX
                 }
-                let lines = ordered.compactMap { observation in
+                let lines: [RecognizedTextLine] = ordered.compactMap {
+                    observation -> RecognizedTextLine? in
                     guard let candidate = observation.topCandidates(1).first
                     else {
                         return nil

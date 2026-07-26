@@ -465,7 +465,7 @@ final class PhaseNineHardeningTests: XCTestCase {
         )
 
         let block = try XCTUnwrap(
-            result.scheduleBlocks.first(where: {
+            result.blocks.first(where: {
                 $0.fixedCommitmentID == commitment.id
             })
         )
