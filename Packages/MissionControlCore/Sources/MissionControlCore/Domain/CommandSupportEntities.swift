@@ -73,9 +73,12 @@ public struct InventoryItem: Codable, Equatable, Identifiable, Sendable {
             return quantityNote
         }
         switch state {
-        case .available: "Available"
-        case .low: "Low"
-        case .empty: "Out"
+        case .available:
+            return "Available"
+        case .low:
+            return "Low"
+        case .empty:
+            return "Out"
         }
     }
 

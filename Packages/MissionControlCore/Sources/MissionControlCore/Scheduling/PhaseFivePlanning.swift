@@ -279,7 +279,7 @@ public struct WorkShiftBatchParser: Sendable {
         else {
             return nil
         }
-        var startHour = normalizedHour(
+        let startHour = normalizedHour(
             startParts.hour,
             meridiem: startParts.meridiem
         )
