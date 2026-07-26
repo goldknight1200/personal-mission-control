@@ -172,7 +172,15 @@ final class VoiceCommandFlowTests: XCTestCase {
         let first = Task { @MainActor in
             await model.prepareActiveExecution()
         }
-        await service.waitForFirstReconciliation()
+        for _ in 0..<1_000 where service.reconciliationCount == 0 {
+            await Task.yield()
+        }
+        guard service.reconciliationCount == 1 else {
+            first.cancel()
+            return XCTFail(
+                "The initial notification reconciliation did not start."
+            )
+        }
 
         let pending = Task { @MainActor in
             await model.reconcileNotifications(
@@ -184,7 +192,6 @@ final class VoiceCommandFlowTests: XCTestCase {
         XCTAssertEqual(service.reconciliationCount, 1)
         XCTAssertEqual(service.maximumConcurrentReconciliations, 1)
 
-        service.releaseFirstReconciliation()
         await first.value
 
         XCTAssertEqual(service.reconciliationCount, 2)
@@ -274,11 +281,6 @@ private final class BlockingNotificationService: NotificationService {
     private(set) var maximumConcurrentReconciliations = 0
 
     private var activeReconciliations = 0
-    private var firstReconciliationWaiters: [
-        CheckedContinuation<Void, Never>
-    ] = []
-    private var firstReconciliationRelease:
-        CheckedContinuation<Void, Never>?
 
     func authorizationState() async -> NotificationAuthorizationState {
         .authorized
@@ -303,28 +305,9 @@ private final class BlockingNotificationService: NotificationService {
             activeReconciliations
         )
         if reconciliationCount == 1 {
-            let waiters = firstReconciliationWaiters
-            firstReconciliationWaiters.removeAll()
-            waiters.forEach { $0.resume() }
-            await withCheckedContinuation { continuation in
-                firstReconciliationRelease = continuation
-            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
         }
         activeReconciliations -= 1
-    }
-
-    func waitForFirstReconciliation() async {
-        if reconciliationCount > 0 {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            firstReconciliationWaiters.append(continuation)
-        }
-    }
-
-    func releaseFirstReconciliation() {
-        firstReconciliationRelease?.resume()
-        firstReconciliationRelease = nil
     }
 }
 

@@ -384,7 +384,19 @@ jobs:
             local name="$3"
             echo "Launching $label profile: $name ($udid)"
             xcrun simctl boot "$udid" 2>/dev/null || true
-            xcrun simctl bootstatus "$udid" -b
+            local is_booted=0
+            for _ in {1..90}; do
+              if xcrun simctl bootstatus "$udid" >/dev/null 2>&1; then
+                is_booted=1
+                break
+              fi
+              sleep 2
+            done
+            if [[ "$is_booted" -ne 1 ]]; then
+              echo "::error title=Simulator boot timed out::$name ($udid) did not become ready within 180 seconds."
+              xcrun simctl list devices
+              return 1
+            fi
             xcrun simctl uninstall "$udid" "$BUNDLE_ID" 2>/dev/null || true
             xcrun simctl install "$udid" "$APP_PATH"
             xcrun simctl status_bar "$udid" override --time "9:41"
