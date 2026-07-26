@@ -378,38 +378,52 @@ jobs:
             exit 1
           fi
 
+          run_simctl() {
+            python3 - "$@" <<'PY'
+          import subprocess
+          import sys
+
+          command = ["xcrun", "simctl", *sys.argv[1:]]
+          try:
+              subprocess.run(command, check=True, timeout=180)
+          except subprocess.TimeoutExpired:
+              print(
+                  "::error title=simctl command timed out::"
+                  + " ".join(command)
+                  + " exceeded 180 seconds.",
+                  file=sys.stderr,
+              )
+              sys.exit(124)
+          except subprocess.CalledProcessError as error:
+              sys.exit(error.returncode)
+          PY
+          }
+
           smoke_profile() {
             local label="$1"
             local udid="$2"
             local name="$3"
             echo "Launching $label profile: $name ($udid)"
-            xcrun simctl boot "$udid" 2>/dev/null || true
-            if ! python3 - "$udid" <<'PY'
-          import subprocess
-          import sys
-
-          try:
-              subprocess.run(
-                  ["xcrun", "simctl", "bootstatus", sys.argv[1], "-b"],
-                  check=True,
-                  timeout=180,
-              )
-          except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-              sys.exit(1)
-          PY
-            then
+            run_simctl boot "$udid" 2>/dev/null || true
+            if ! run_simctl bootstatus "$udid" -b; then
               echo "::error title=Simulator boot timed out::$name ($udid) did not become ready within 180 seconds."
               return 1
             fi
-            xcrun simctl uninstall "$udid" "$BUNDLE_ID" 2>/dev/null || true
-            xcrun simctl install "$udid" "$APP_PATH"
-            xcrun simctl status_bar "$udid" override --time "9:41"
-            xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID"
+            run_simctl uninstall "$udid" "$BUNDLE_ID" 2>/dev/null || true
+            run_simctl install "$udid" "$APP_PATH"
+            run_simctl status_bar "$udid" override --time "9:41"
+            run_simctl launch \
+              --terminate-running-process \
+              "$udid" \
+              "$BUNDLE_ID"
             sleep 5
-            xcrun simctl io "$udid" screenshot "UIArtifacts/${label}.png"
-            xcrun simctl get_app_container "$udid" "$BUNDLE_ID" app
-            xcrun simctl terminate "$udid" "$BUNDLE_ID"
-            xcrun simctl shutdown "$udid"
+            run_simctl io \
+              "$udid" \
+              screenshot \
+              "UIArtifacts/${label}.png"
+            run_simctl get_app_container "$udid" "$BUNDLE_ID" app
+            run_simctl terminate "$udid" "$BUNDLE_ID"
+            run_simctl shutdown "$udid"
           }
 
           smoke_profile \
