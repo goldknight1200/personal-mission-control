@@ -361,6 +361,7 @@ jobs:
           ${{
             always()
             && steps.debug_build.outcome == 'success'
+            && steps.simulator_tests.outcome == 'success'
             && steps.simulator.outputs.small_udid != ''
             && steps.simulator.outputs.common_udid != ''
             && steps.simulator.outputs.large_udid != ''
