@@ -8,25 +8,49 @@ struct PersonalMissionControlApp: App {
 
     init() {
         let notificationService = AppleNotificationService()
+        let calendarService = AppleCalendarService()
+        let healthService = HealthKitSleepService()
+        let iCalService = URLSessionICalSubscriptionService()
+        let secretStore = KeychainSecretStore()
+        let imageRecognizer = VisionWorkShiftImageTextRecognizer()
+        let aiProviderFactory:
+            (AIIntegrationSettings) -> (any AICommandProvider)? = {
+                settings in
+                CustomJSONAIProvider(
+                    settings: settings,
+                    secretStore: secretStore
+                )
+            }
+        let model: AppModel
         do {
             let repository = try SwiftDataMissionControlRepository()
-            _appModel = StateObject(
-                wrappedValue: AppModel(
-                    repository: repository,
-                    notificationService: notificationService
-                )
+            model = AppModel(
+                repository: repository,
+                notificationService: notificationService,
+                calendarProvider: calendarService,
+                healthProvider: healthService,
+                iCalProvider: iCalService,
+                shiftImageRecognizer: imageRecognizer,
+                secretStore: secretStore,
+                aiProviderFactory: aiProviderFactory
             )
         } catch {
             let repository = InMemoryMissionControlRepository()
-            _appModel = StateObject(
-                wrappedValue: AppModel(
-                    repository: repository,
-                    startupNotice: "Local storage is unavailable. Changes will last for this session.",
-                    usesDurableStorage: false,
-                    notificationService: notificationService
-                )
+            model = AppModel(
+                repository: repository,
+                startupNotice: "Local storage is unavailable. Changes will last for this session.",
+                usesDurableStorage: false,
+                notificationService: notificationService,
+                calendarProvider: calendarService,
+                healthProvider: healthService,
+                iCalProvider: iCalService,
+                shiftImageRecognizer: imageRecognizer,
+                secretStore: secretStore,
+                aiProviderFactory: aiProviderFactory
             )
         }
+        _appModel = StateObject(wrappedValue: model)
+        MissionControlIntentBridge.shared.configure(model: model)
     }
 
     var body: some Scene {

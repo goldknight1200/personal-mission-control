@@ -90,6 +90,11 @@ final class DomainModelTests: XCTestCase {
             JSONSerialization.jsonObject(with: encoded) as? [String: Any]
         )
         object.removeValue(forKey: "preferredMealStartMinutes")
+        object.removeValue(forKey: "clearCalorieDeficitThreshold")
+        object.removeValue(forKey: "clearProteinDeficitThreshold")
+        object.removeValue(forKey: "clearSubstantialMealDeficitThreshold")
+        object.removeValue(forKey: "additionalEatingBlockMinutes")
+        object.removeValue(forKey: "inventoryShoppingLeadHours")
         let legacyData = try JSONSerialization.data(withJSONObject: object)
 
         let decoded = try JSONDecoder().decode(
@@ -101,6 +106,11 @@ final class DomainModelTests: XCTestCase {
             decoded.preferredMealStartMinutes,
             [8 * 60, 13 * 60, 19 * 60]
         )
+        XCTAssertEqual(decoded.clearCalorieDeficitThreshold, 400)
+        XCTAssertEqual(decoded.clearProteinDeficitThreshold, 25)
+        XCTAssertEqual(decoded.clearSubstantialMealDeficitThreshold, 1)
+        XCTAssertEqual(decoded.additionalEatingBlockMinutes, 20)
+        XCTAssertEqual(decoded.inventoryShoppingLeadHours, 24)
     }
 
     func testPhaseOneSnapshotPayloadDecodesWithLaterCollectionsEmpty() throws {
@@ -113,6 +123,8 @@ final class DomainModelTests: XCTestCase {
         )
         object["schemaVersion"] = 1
         object.removeValue(forKey: "inventoryItems")
+        object.removeValue(forKey: "mealTemplates")
+        object.removeValue(forKey: "plannedMeals")
         object.removeValue(forKey: "painFlags")
         object.removeValue(forKey: "missionStartRecords")
         object.removeValue(forKey: "replanRequests")
@@ -126,6 +138,7 @@ final class DomainModelTests: XCTestCase {
         object.removeValue(forKey: "schedulingDecisions")
         object.removeValue(forKey: "schedulingConflicts")
         object.removeValue(forKey: "schedulingPlanMetadata")
+        object.removeValue(forKey: "manualScheduleAdjustments")
         let legacyData = try JSONSerialization.data(withJSONObject: object)
 
         let decoded = try JSONDecoder().decode(
@@ -135,6 +148,8 @@ final class DomainModelTests: XCTestCase {
 
         XCTAssertEqual(decoded.schemaVersion, 1)
         XCTAssertTrue(decoded.inventoryItems.isEmpty)
+        XCTAssertTrue(decoded.mealTemplates.isEmpty)
+        XCTAssertTrue(decoded.plannedMeals.isEmpty)
         XCTAssertTrue(decoded.painFlags.isEmpty)
         XCTAssertTrue(decoded.missionStartRecords.isEmpty)
         XCTAssertTrue(decoded.replanRequests.isEmpty)
@@ -148,6 +163,50 @@ final class DomainModelTests: XCTestCase {
         XCTAssertTrue(decoded.schedulingDecisions.isEmpty)
         XCTAssertTrue(decoded.schedulingConflicts.isEmpty)
         XCTAssertNil(decoded.schedulingPlanMetadata)
+        XCTAssertTrue(decoded.manualScheduleAdjustments.isEmpty)
+    }
+
+    func testLegacyProjectsAndRoutinesReceivePhaseFiveDefaults() throws {
+        let snapshot = MissionControlSeed.makeDemo(
+            referenceDate: Date(timeIntervalSince1970: 4_750)
+        )
+        let projectData = try JSONEncoder().encode(
+            try XCTUnwrap(snapshot.projects.first)
+        )
+        var projectObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: projectData)
+                as? [String: Any]
+        )
+        projectObject.removeValue(forKey: "weeklyPlannedMinutes")
+        projectObject.removeValue(forKey: "lastActiveReviewAt")
+        let legacyProject = try JSONDecoder().decode(
+            Project.self,
+            from: JSONSerialization.data(withJSONObject: projectObject)
+        )
+        XCTAssertEqual(legacyProject.weeklyPlannedMinutes, 0)
+        XCTAssertNil(legacyProject.lastActiveReviewAt)
+
+        let routineData = try JSONEncoder().encode(
+            try XCTUnwrap(snapshot.routines.first)
+        )
+        var routineObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: routineData)
+                as? [String: Any]
+        )
+        routineObject.removeValue(forKey: "anchorDate")
+        routineObject.removeValue(forKey: "flexibleCadence")
+        routineObject.removeValue(forKey: "compatibleRoutineIDs")
+        routineObject.removeValue(forKey: "allowsCompatibleOverlap")
+        routineObject.removeValue(forKey: "bundlingNote")
+        let legacyRoutine = try JSONDecoder().decode(
+            Routine.self,
+            from: JSONSerialization.data(withJSONObject: routineObject)
+        )
+        XCTAssertNil(legacyRoutine.anchorDate)
+        XCTAssertNil(legacyRoutine.flexibleCadence)
+        XCTAssertTrue(legacyRoutine.compatibleRoutineIDs.isEmpty)
+        XCTAssertFalse(legacyRoutine.allowsCompatibleOverlap)
+        XCTAssertTrue(legacyRoutine.bundlingNote.isEmpty)
     }
 
     func testLegacyMissionStartRecordDecodesWithoutBlockIdentity() throws {

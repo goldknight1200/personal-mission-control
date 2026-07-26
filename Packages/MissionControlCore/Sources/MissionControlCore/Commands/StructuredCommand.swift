@@ -6,6 +6,7 @@ public enum CommandIntentKind: String, CaseIterable, Codable, Equatable, Sendabl
     case addTodayItem
     case addShoppingItem
     case emptyInventoryItem
+    case updateInventory
     case moveMission
     case skipMission
     case addWorkShift
@@ -19,6 +20,7 @@ public enum CommandIntentKind: String, CaseIterable, Codable, Equatable, Sendabl
         case .addTodayItem: "Add to Today"
         case .addShoppingItem: "Add to Shopping"
         case .emptyInventoryItem: "Update inventory"
+        case .updateInventory: "Update inventory"
         case .moveMission: "Move mission"
         case .skipMission: "Skip mission"
         case .addWorkShift: "Add work shift"
@@ -43,6 +45,7 @@ public enum ExtractedEntityKind: String, Codable, Equatable, Sendable {
     case durationMinutes
     case checklistItem
     case inventoryItem
+    case inventoryQuantity
     case date
     case timeRange
     case bodyArea
@@ -106,11 +109,43 @@ public struct WorkShiftPayload: Codable, Equatable, Sendable {
     public var title: String
     public var start: Date
     public var end: Date
+    public var location: String?
 
-    public init(title: String = "Work shift", start: Date, end: Date) {
+    public init(
+        title: String = "Work shift",
+        start: Date,
+        end: Date,
+        location: String? = nil
+    ) {
         self.title = title
         self.start = start
         self.end = end
+        self.location = location
+    }
+}
+
+public struct InventoryUpdatePayload: Codable, Equatable, Sendable {
+    public var name: String
+    public var state: InventoryState?
+    public var exactQuantity: Double?
+    public var quantityUnit: String?
+    public var mealsRemaining: Int?
+    public var quantityNote: String?
+
+    public init(
+        name: String,
+        state: InventoryState? = nil,
+        exactQuantity: Double? = nil,
+        quantityUnit: String? = nil,
+        mealsRemaining: Int? = nil,
+        quantityNote: String? = nil
+    ) {
+        self.name = name
+        self.state = state
+        self.exactQuantity = exactQuantity
+        self.quantityUnit = quantityUnit
+        self.mealsRemaining = mealsRemaining
+        self.quantityNote = quantityNote
     }
 }
 
@@ -119,6 +154,7 @@ public enum ProposedMutation: Codable, Equatable, Sendable {
     case markMissionStarted(missionID: EntityID?, missionName: String, minutesAgo: Int)
     case addChecklistItem(kind: ChecklistKind, title: String)
     case markInventoryEmpty(name: String)
+    case updateInventory(InventoryUpdatePayload)
     case requestMissionMove(missionID: EntityID?, missionName: String)
     case skipMission(missionID: EntityID?, missionName: String)
     case addWorkShift(WorkShiftPayload)
@@ -134,6 +170,16 @@ public enum ProposedMutation: Codable, Equatable, Sendable {
             "Add “\(title)” to \(kind.displayName)"
         case let .markInventoryEmpty(name):
             "Mark \(name) as empty"
+        case let .updateInventory(update):
+            if let meals = update.mealsRemaining {
+                "Set \(update.name) to \(meals) meals remaining"
+            } else if let quantity = update.exactQuantity {
+                "Set \(update.name) to \(quantity.formatted())\(update.quantityUnit.map { " \($0)" } ?? "")"
+            } else if let state = update.state {
+                "Mark \(update.name) as \(state == .empty ? "out" : state.rawValue)"
+            } else {
+                "Update \(update.name)"
+            }
         case let .requestMissionMove(_, missionName):
             "Request a new time for \(missionName)"
         case let .skipMission(_, missionName):
@@ -173,6 +219,8 @@ public struct StructuredCommand: Codable, Equatable, Identifiable, Sendable {
     public var warnings: [CommandWarning]
     public var confirmationRequirement: ConfirmationRequirement
     public var createdAt: Date
+    public var interpretationSource: CommandInterpretationSource?
+    public var contextRevisionToken: String?
 
     public init(
         id: EntityID = EntityID(),
@@ -185,7 +233,9 @@ public struct StructuredCommand: Codable, Equatable, Identifiable, Sendable {
         affectedScheduleRange: AffectedScheduleRange = AffectedScheduleRange(),
         warnings: [CommandWarning] = [],
         confirmationRequirement: ConfirmationRequirement = .none,
-        createdAt: Date
+        createdAt: Date,
+        interpretationSource: CommandInterpretationSource? = .localRule,
+        contextRevisionToken: String? = nil
     ) {
         self.id = id
         self.rawTranscript = rawTranscript
@@ -201,6 +251,13 @@ public struct StructuredCommand: Codable, Equatable, Identifiable, Sendable {
         self.warnings = warnings
         self.confirmationRequirement = confirmationRequirement
         self.createdAt = createdAt
+        self.interpretationSource = interpretationSource
+        self.contextRevisionToken = contextRevisionToken
+    }
+
+    public mutating func removeTranscriptContent() {
+        rawTranscript = "[Not retained]"
+        confirmedTranscript = "[Not retained]"
     }
 }
 
@@ -234,6 +291,7 @@ public struct CommandContext: Codable, Equatable, Sendable {
     public var timeZoneIdentifier: String
     public var missions: [CommandMissionReference]
     public var fixedCommitments: [FixedCommitment]
+    public var revisionToken: String
 
     public init(
         referenceDate: Date,
@@ -245,6 +303,10 @@ public struct CommandContext: Codable, Equatable, Sendable {
         self.timeZoneIdentifier = timeZoneIdentifier
         self.missions = missions
         self.fixedCommitments = fixedCommitments
+        revisionToken = Self.makeRevisionToken(
+            missions: missions,
+            fixedCommitments: fixedCommitments
+        )
     }
 
     public init(snapshot: MissionControlSnapshot, referenceDate: Date) {
@@ -262,6 +324,42 @@ public struct CommandContext: Codable, Equatable, Sendable {
                 scheduledEnd: block?.end
             )
         }
+        revisionToken = Self.makeRevisionToken(
+            missions: missions,
+            fixedCommitments: fixedCommitments
+        )
+    }
+
+    private static func makeRevisionToken(
+        missions: [CommandMissionReference],
+        fixedCommitments: [FixedCommitment]
+    ) -> String {
+        let missionParts = missions.sorted { $0.id < $1.id }.map {
+            [
+                $0.id.rawValue.uuidString.lowercased(),
+                $0.title,
+                $0.rigidity.rawValue,
+                String($0.scheduledStart?.timeIntervalSince1970 ?? -1),
+                String($0.scheduledEnd?.timeIntervalSince1970 ?? -1)
+            ].joined(separator: ":")
+        }
+        let fixedParts = fixedCommitments.sorted { $0.id < $1.id }.map {
+            [
+                $0.id.rawValue.uuidString.lowercased(),
+                $0.title,
+                String($0.start.timeIntervalSince1970),
+                String($0.end.timeIntervalSince1970),
+                String($0.isExternallyManaged)
+            ].joined(separator: ":")
+        }
+        let material = (missionParts + ["--fixed--"] + fixedParts)
+            .joined(separator: "|")
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in material.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 1_099_511_628_211
+        }
+        return String(hash, radix: 16)
     }
 }
 

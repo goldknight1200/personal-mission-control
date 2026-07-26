@@ -93,17 +93,33 @@ public struct NutritionTargets: Codable, Equatable, Sendable {
     public var approximateProteinGrams: Int
     public var substantialMeals: Int
     public var preferredMealStartMinutes: [Int]
+    public var clearCalorieDeficitThreshold: Int
+    public var clearProteinDeficitThreshold: Int
+    public var clearSubstantialMealDeficitThreshold: Int
+    public var additionalEatingBlockMinutes: Int
+    public var inventoryShoppingLeadHours: Int
 
     public init(
         approximateCalories: Int,
         approximateProteinGrams: Int,
         substantialMeals: Int,
-        preferredMealStartMinutes: [Int] = [8 * 60, 13 * 60, 19 * 60]
+        preferredMealStartMinutes: [Int] = [8 * 60, 13 * 60, 19 * 60],
+        clearCalorieDeficitThreshold: Int = 400,
+        clearProteinDeficitThreshold: Int = 25,
+        clearSubstantialMealDeficitThreshold: Int = 1,
+        additionalEatingBlockMinutes: Int = 20,
+        inventoryShoppingLeadHours: Int = 24
     ) {
         self.approximateCalories = approximateCalories
         self.approximateProteinGrams = approximateProteinGrams
         self.substantialMeals = substantialMeals
         self.preferredMealStartMinutes = preferredMealStartMinutes
+        self.clearCalorieDeficitThreshold = clearCalorieDeficitThreshold
+        self.clearProteinDeficitThreshold = clearProteinDeficitThreshold
+        self.clearSubstantialMealDeficitThreshold =
+            clearSubstantialMealDeficitThreshold
+        self.additionalEatingBlockMinutes = additionalEatingBlockMinutes
+        self.inventoryShoppingLeadHours = inventoryShoppingLeadHours
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -111,6 +127,11 @@ public struct NutritionTargets: Codable, Equatable, Sendable {
         case approximateProteinGrams
         case substantialMeals
         case preferredMealStartMinutes
+        case clearCalorieDeficitThreshold
+        case clearProteinDeficitThreshold
+        case clearSubstantialMealDeficitThreshold
+        case additionalEatingBlockMinutes
+        case inventoryShoppingLeadHours
     }
 
     public init(from decoder: Decoder) throws {
@@ -131,6 +152,26 @@ public struct NutritionTargets: Codable, Equatable, Sendable {
             [Int].self,
             forKey: .preferredMealStartMinutes
         ) ?? [8 * 60, 13 * 60, 19 * 60]
+        clearCalorieDeficitThreshold = try container.decodeIfPresent(
+            Int.self,
+            forKey: .clearCalorieDeficitThreshold
+        ) ?? 400
+        clearProteinDeficitThreshold = try container.decodeIfPresent(
+            Int.self,
+            forKey: .clearProteinDeficitThreshold
+        ) ?? 25
+        clearSubstantialMealDeficitThreshold = try container.decodeIfPresent(
+            Int.self,
+            forKey: .clearSubstantialMealDeficitThreshold
+        ) ?? 1
+        additionalEatingBlockMinutes = try container.decodeIfPresent(
+            Int.self,
+            forKey: .additionalEatingBlockMinutes
+        ) ?? 20
+        inventoryShoppingLeadHours = try container.decodeIfPresent(
+            Int.self,
+            forKey: .inventoryShoppingLeadHours
+        ) ?? 24
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -144,6 +185,26 @@ public struct NutritionTargets: Codable, Equatable, Sendable {
         try container.encode(
             preferredMealStartMinutes,
             forKey: .preferredMealStartMinutes
+        )
+        try container.encode(
+            clearCalorieDeficitThreshold,
+            forKey: .clearCalorieDeficitThreshold
+        )
+        try container.encode(
+            clearProteinDeficitThreshold,
+            forKey: .clearProteinDeficitThreshold
+        )
+        try container.encode(
+            clearSubstantialMealDeficitThreshold,
+            forKey: .clearSubstantialMealDeficitThreshold
+        )
+        try container.encode(
+            additionalEatingBlockMinutes,
+            forKey: .additionalEatingBlockMinutes
+        )
+        try container.encode(
+            inventoryShoppingLeadHours,
+            forKey: .inventoryShoppingLeadHours
         )
     }
 }

@@ -26,6 +26,8 @@ private final class Planner {
         var latest: Date?
         var existingBlock: ScheduleBlock?
         var repeatedMissCause: MissionMissCause?
+        var workout: ScheduledWorkoutMetadata? = nil
+        var workoutSequence: Int? = nil
     }
 
     private struct TransitionSpec {
@@ -94,6 +96,11 @@ private final class Planner {
         preserveFreeTime()
 
         blocks.sort(by: blockOrder)
+        let fullyUnscheduled = Set(unscheduledMissionIDs).filter { missionID in
+            !blocks.contains(where: {
+                $0.missionID == missionID && $0.kind == .mission
+            })
+        }
         return SchedulingResult(
             metadata: SchedulingPlanMetadata(
                 generatedAt: input.currentTime,
@@ -105,7 +112,7 @@ private final class Planner {
             generatedMissions: generatedMissions,
             decisions: decisions,
             conflicts: conflicts,
-            unscheduledMissionIDs: Array(Set(unscheduledMissionIDs)).sorted()
+            unscheduledMissionIDs: Array(fullyUnscheduled).sorted()
         )
     }
 
@@ -117,18 +124,62 @@ private final class Planner {
             guard !blocks.contains(where: { $0.id == block.id }) else {
                 continue
             }
-            blocks.append(block)
+            var preserved = block
+            if block.end > input.currentTime,
+               var metadata = block.workout,
+               let session = input.workoutPrograms
+                .first(where: { $0.id == metadata.programID })?
+                .sessionTemplates.first(where: {
+                    $0.id == metadata.sessionTemplateID
+                }) {
+                let newlyBlocked = WorkoutPlanning.blockedExerciseIDs(
+                    in: session,
+                    painFlags: input.painFlags
+                )
+                if !metadata.isShortened {
+                    metadata.exerciseIDs = session.exercises.map(\.id)
+                }
+                metadata.blockedExerciseIDs = newlyBlocked
+                metadata.exerciseIDs.removeAll(where: {
+                    newlyBlocked.contains($0)
+                })
+                preserved.workout = metadata
+                if !newlyBlocked.isEmpty {
+                    addDecision(
+                        kind: .recoveryAdjusted,
+                        rule: .painRestriction,
+                        missionID: block.missionID,
+                        blockID: block.id,
+                        title: block.title,
+                        explanation: "Active pain safeguards were applied to this frozen occurrence without changing its approved session template.",
+                        previousStart: block.start,
+                        newStart: block.start
+                    )
+                }
+            }
+            if preserved.workout?.exerciseIDs.isEmpty == true {
+                addDecision(
+                    kind: .omitted,
+                    rule: .painRestriction,
+                    missionID: block.missionID,
+                    blockID: block.id,
+                    title: block.title,
+                    explanation: "The frozen gym occurrence has no unaffected approved exercises and remains blocked pending explicit reassessment."
+                )
+                continue
+            }
+            blocks.append(preserved)
             addDecision(
                 kind: .preserved,
                 rule: .stability,
-                missionID: block.missionID,
-                blockID: block.id,
-                title: block.title,
-                explanation: block.kind == .freeTime
+                missionID: preserved.missionID,
+                blockID: preserved.id,
+                title: preserved.title,
+                explanation: preserved.kind == .freeTime
                     ? "Past free time was frozen with the rest of history."
                     : "This block was frozen or outside the affected replan range.",
-                previousStart: block.start,
-                newStart: block.start
+                previousStart: preserved.start,
+                newStart: preserved.start
             )
         }
     }
@@ -172,7 +223,10 @@ private final class Planner {
     }
 
     private func detectFixedConflicts() {
-        let fixed = blocks.filter { $0.kind == .fixedCommitment }
+        let lockedIDs = Set(input.lockedBlocks.map(\.id))
+        let fixed = blocks.filter {
+            $0.kind == .fixedCommitment || lockedIDs.contains($0.id)
+        }
             .sorted(by: blockOrder)
         guard fixed.count > 1 else { return }
         for leftIndex in 0..<(fixed.count - 1) {
@@ -186,8 +240,9 @@ private final class Planner {
                 addConflict(
                     kind: .fixedOverlap,
                     severity: .blocking,
-                    title: "Fixed commitments overlap",
-                    explanation: "\(left.title) and \(right.title) both retain their exact times. The planner cannot resolve this without user authority.",
+                    title: "User-controlled blocks overlap",
+                    explanation: "\(left.title) and \(right.title) both retain their exact times. Adjust one of them to resolve the conflict.",
+                    missionID: left.missionID ?? right.missionID,
                     commitmentIDs: [
                         left.fixedCommitmentID,
                         right.fixedCommitmentID
@@ -246,7 +301,8 @@ private final class Planner {
                 )
             }
             cursor = commitment.end
-            if spec.travelAfterMinutes > 0 {
+            if spec.travelAfterMinutes > 0,
+               !canBundleShopping(after: commitment) {
                 let end = cursor.addingTimeInterval(
                     TimeInterval(spec.travelAfterMinutes * 60)
                 )
@@ -386,51 +442,89 @@ private final class Planner {
         let mealTimes = input.profile.nutritionTargets.preferredMealStartMinutes
         for need in needs.sorted(by: { $0.localDay < $1.localDay }) {
             let day = calendar.startOfDay(for: need.localDay)
-            let lockedCoverage = blocks.filter {
-                $0.kind == .meal
-                    && calendar.isDate($0.start, inSameDayAs: day)
+            placeSavedMeals(
+                input.plannedMeals.filter {
+                    calendar.isDate($0.localDay, inSameDayAs: day)
+                },
+                need: need,
+                day: day,
+                mealTimes: mealTimes
+            )
+            for block in blocks
+            where block.kind == .meal
+                && calendar.isDate(block.start, inSameDayAs: day) {
+                guard let missionID = block.missionID,
+                      !generatedMissions.contains(where: {
+                          $0.id == missionID
+                      }) else {
+                    continue
+                }
+                generatedMissions.append(
+                    nutritionMission(
+                        id: missionID,
+                        title: block.title,
+                        durationMinutes: block.durationMinutes,
+                        nutritionPlanningNeedID: need.id
+                    )
+                )
+            }
+            let suggestionMissionID = identifiers.identifier(
+                namespace:
+                    "nutrition.suggestion.\(need.id.rawValue.uuidString)"
+            )
+
+            let nonPlannedCoverage = blocks.filter {
+                guard $0.kind == .meal,
+                      calendar.isDate($0.start, inSameDayAs: day) else {
+                    return false
+                }
+                guard let missionID = $0.missionID,
+                      let mission = generatedMissions.first(where: {
+                          $0.id == missionID
+                      }) else {
+                    return true
+                }
+                return mission.plannedMealID == nil
+                    && mission.id != suggestionMissionID
             }.count
-            let requiredBySignal = need.clearDeficit
-                ? max(need.missingMealCount, 1)
-                : need.missingMealCount
             let mealsToPlace = max(
-                requiredBySignal - lockedCoverage,
+                need.missingMealCount - nonPlannedCoverage,
                 0
             )
-            guard mealsToPlace > 0 else { continue }
             for index in 0..<mealsToPlace {
-                let mealIndex = lockedCoverage + index
+                let mealIndex =
+                    need.substantialMealsCovered + nonPlannedCoverage + index
                 let preferredMinute = mealTimes.isEmpty
                     ? 13 * 60
                     : mealTimes[min(mealIndex, mealTimes.count - 1)]
-                let namespace = "meal.\(dayKey(day)).\(mealIndex)"
-                let earliestOverride = need.clearDeficit
-                    && calendar.isDate(day, inSameDayAs: input.currentTime)
-                    ? input.currentTime
-                    : nil
+                let namespace =
+                    "nutrition.coverage.\(need.id.rawValue.uuidString).\(index)"
                 guard let start = findSimpleSlot(
                     day: day,
                     durationMinutes: need.suggestedMealDurationMinutes,
                     preferredMinute: preferredMinute,
-                    earliestOverride: earliestOverride
+                    earliestOverride: nil
                 ) else {
                     addConflict(
                         kind: .noValidWindow,
-                        severity: need.clearDeficit ? .blocking : .warning,
+                        severity: .warning,
                         title: "No eating window available",
-                        explanation: need.clearDeficit
-                            ? "A clear food deficit was reported, but no non-overlapping eating block fits before protected sleep."
-                            : "The requested substantial-meal coverage does not fit without moving a harder constraint.",
+                        explanation: "The requested substantial-meal coverage does not fit without moving a harder constraint.",
                         start: day,
                         end: awakeEnd(for: day)
                     )
                     continue
                 }
-                let block = ScheduleBlock(
+                let mission = nutritionMission(
                     id: identifiers.identifier(namespace: namespace),
-                    title: need.clearDeficit && mealIndex == 0
-                        ? "Eat — food deficit"
-                        : "Substantial meal",
+                    title: "Substantial meal",
+                    durationMinutes: need.suggestedMealDurationMinutes,
+                    nutritionPlanningNeedID: need.id
+                )
+                let block = ScheduleBlock(
+                    id: identifiers.identifier(namespace: "\(namespace).block"),
+                    missionID: mission.id,
+                    title: mission.title,
                     category: .nutrition,
                     kind: .meal,
                     rigidity: .protected,
@@ -439,19 +533,218 @@ private final class Planner {
                         TimeInterval(need.suggestedMealDurationMinutes * 60)
                     )
                 )
+                generatedMissions.append(mission)
                 blocks.append(block)
                 addDecision(
                     kind: .placed,
                     rule: .nutritionCoverage,
+                    missionID: mission.id,
                     blockID: block.id,
                     title: block.title,
-                    explanation: need.clearDeficit && mealIndex == 0
-                        ? "Inserted the earliest practical eating block because a clear food deficit was reported."
-                        : "Reserved practical time toward the editable substantial-meal target.",
+                    explanation: "Reserved practical time toward the editable substantial-meal target.",
                     newStart: start
                 )
             }
+
+            placeDeficitSuggestion(
+                need: need,
+                day: day,
+                mealTimes: mealTimes
+            )
         }
+    }
+
+    private func placeSavedMeals(
+        _ meals: [PlannedMeal],
+        need: NutritionPlanningNeed,
+        day: Date,
+        mealTimes: [Int]
+    ) {
+        let sortedMeals = meals.sorted {
+            ($0.preferredStartMinute ?? Int.max)
+                < ($1.preferredStartMinute ?? Int.max)
+        }
+        for (index, plannedMeal) in sortedMeals.enumerated() {
+            let missionID = identifiers.identifier(
+                namespace:
+                    "nutrition.planned.\(plannedMeal.id.rawValue.uuidString)"
+            )
+            let mission = nutritionMission(
+                id: missionID,
+                title: plannedMeal.title,
+                durationMinutes: plannedMeal.estimatedDurationMinutes,
+                plannedMealID: plannedMeal.id,
+                mealTemplateID: plannedMeal.mealTemplateID,
+                nutritionPlanningNeedID: need.id
+            )
+            guard !input.completionHistory.contains(where: {
+                $0.missionID == missionID
+                    && ($0.status == .completed || $0.status == .partial)
+            }) else {
+                continue
+            }
+            if blocks.contains(where: { $0.missionID == missionID }) {
+                generatedMissions.append(mission)
+                continue
+            }
+            let fallbackMinute = mealTimes.isEmpty
+                ? 13 * 60
+                : mealTimes[min(index, mealTimes.count - 1)]
+            guard let start = findSimpleSlot(
+                day: day,
+                durationMinutes: plannedMeal.estimatedDurationMinutes,
+                preferredMinute:
+                    plannedMeal.preferredStartMinute ?? fallbackMinute,
+                earliestOverride: nil
+            ) else {
+                addConflict(
+                    kind: .noValidWindow,
+                    severity: .warning,
+                    title: "No window for \(plannedMeal.title)",
+                    explanation: "The planned meal could not fit without overlapping a harder commitment or protected sleep.",
+                    start: day,
+                    end: awakeEnd(for: day)
+                )
+                continue
+            }
+            let block = ScheduleBlock(
+                id: identifiers.identifier(
+                    namespace:
+                        "nutrition.planned.block.\(plannedMeal.id.rawValue.uuidString)"
+                ),
+                missionID: mission.id,
+                title: mission.title,
+                category: .nutrition,
+                kind: .meal,
+                rigidity: .protected,
+                start: start,
+                end: start.addingTimeInterval(
+                    TimeInterval(
+                        plannedMeal.estimatedDurationMinutes * 60
+                    )
+                )
+            )
+            generatedMissions.append(mission)
+            blocks.append(block)
+            addDecision(
+                kind: .placed,
+                rule: .nutritionCoverage,
+                missionID: mission.id,
+                blockID: block.id,
+                title: block.title,
+                explanation: "Placed the saved approximate meal plan before flexible project and household work.",
+                newStart: start
+            )
+        }
+    }
+
+    private func placeDeficitSuggestion(
+        need: NutritionPlanningNeed,
+        day: Date,
+        mealTimes: [Int]
+    ) {
+        guard need.clearDeficit,
+              need.suggestionDisposition != .declined else {
+            return
+        }
+        let namespace =
+            "nutrition.suggestion.\(need.id.rawValue.uuidString)"
+        let missionID = identifiers.identifier(namespace: namespace)
+        let title = "Eat — food deficit: \(need.suggestedTitle)"
+        let mission = nutritionMission(
+            id: missionID,
+            title: title,
+            durationMinutes: need.suggestedMealDurationMinutes,
+            mealTemplateID: need.suggestedMealTemplateID,
+            nutritionPlanningNeedID: need.id
+        )
+        guard !input.completionHistory.contains(where: {
+            $0.missionID == missionID
+                && ($0.status == .completed || $0.status == .partial)
+        }) else {
+            return
+        }
+        if blocks.contains(where: { $0.missionID == missionID }) {
+            if let index = generatedMissions.firstIndex(where: {
+                $0.id == missionID
+            }) {
+                generatedMissions[index] = mission
+            } else {
+                generatedMissions.append(mission)
+            }
+            return
+        }
+        let preferredMinute = need.suggestedStartMinute
+            ?? mealTimes.last
+            ?? 20 * 60
+        let earliestOverride =
+            calendar.isDate(day, inSameDayAs: input.currentTime)
+            ? input.currentTime
+            : nil
+        guard let start = findSimpleSlot(
+            day: day,
+            durationMinutes: need.suggestedMealDurationMinutes,
+            preferredMinute: preferredMinute,
+            earliestOverride: earliestOverride
+        ) else {
+            addConflict(
+                kind: .noValidWindow,
+                severity: .blocking,
+                title: "Food coverage still looks short",
+                explanation: "The approximate deficit was detected, but no non-overlapping eating block fits before protected sleep. The suggestion remains editable or can be declined.",
+                start: day,
+                end: awakeEnd(for: day)
+            )
+            return
+        }
+        let block = ScheduleBlock(
+            id: identifiers.identifier(namespace: "\(namespace).block"),
+            missionID: mission.id,
+            title: title,
+            category: .nutrition,
+            kind: .meal,
+            rigidity: .protected,
+            start: start,
+            end: start.addingTimeInterval(
+                TimeInterval(need.suggestedMealDurationMinutes * 60)
+            )
+        )
+        generatedMissions.append(mission)
+        blocks.append(block)
+        addDecision(
+            kind: .placed,
+            rule: .nutritionCoverage,
+            missionID: mission.id,
+            blockID: block.id,
+            title: block.title,
+            explanation: "Inserted a practical saved meal, snack, or generic eating block because the approximate daily plan is clearly below an editable coverage threshold.",
+            newStart: start
+        )
+    }
+
+    private func nutritionMission(
+        id: EntityID,
+        title: String,
+        durationMinutes: Int,
+        plannedMealID: EntityID? = nil,
+        mealTemplateID: EntityID? = nil,
+        nutritionPlanningNeedID: EntityID? = nil
+    ) -> Mission {
+        Mission(
+            id: id,
+            category: .nutrition,
+            title: title,
+            rigidity: .protected,
+            importance: .high,
+            urgency: .normal,
+            estimatedDurationMinutes: durationMinutes,
+            minimumUsefulBlockMinutes: min(durationMinutes, 10),
+            consistencyCost: .high,
+            energyDemand: .low,
+            plannedMealID: plannedMealID,
+            mealTemplateID: mealTemplateID,
+            nutritionPlanningNeedID: nutritionPlanningNeedID
+        )
     }
 
     private func normalizedNutritionNeeds() -> [NutritionPlanningNeed] {
@@ -494,9 +787,25 @@ private final class Planner {
             && mission.status == .planned
             && !approvedMissionIDs.contains(mission.id)
             && !input.deferredMissionIDs.contains(mission.id) {
-            if blocks.contains(where: {
+            let alreadyLocked = blocks.contains(where: {
                 $0.missionID == mission.id && $0.kind == .mission
-            }) {
+            })
+            if mission.category == .project,
+               let project = mission.projectID.flatMap({ projectID in
+                   input.projects.first(where: { $0.id == projectID })
+               }),
+               project.status == .backlog {
+                unscheduledMissionIDs.append(mission.id)
+                addDecision(
+                    kind: .omitted,
+                    rule: .projectPriority,
+                    missionID: mission.id,
+                    title: mission.title,
+                    explanation: "The project is in Backlog, so it has no automatic schedule exposure."
+                )
+                continue
+            }
+            if alreadyLocked && mission.category != .project {
                 continue
             }
             if mission.rigidity == .droppable,
@@ -512,7 +821,13 @@ private final class Planner {
                 )
                 continue
             }
-            candidates.append(candidate(for: mission))
+            if mission.category == .project {
+                candidates.append(
+                    contentsOf: projectCandidates(for: mission)
+                )
+            } else {
+                candidates.append(candidate(for: mission))
+            }
         }
         candidates.append(contentsOf: approvedWorkoutCandidates())
         candidates.append(contentsOf: routineCandidates(includeTriggered: false))
@@ -647,6 +962,41 @@ private final class Planner {
                         && $0.end > input.currentTime
                 }
                 .sorted(by: blockOrder)
+            let program = workout.programID.flatMap { programID in
+                input.workoutPrograms.first(where: {
+                    $0.id == programID && $0.isApproved && $0.isActive
+                })
+            }
+            if workout.programID != nil, program == nil {
+                unscheduledMissionIDs.append(mission.id)
+                addDecision(
+                    kind: .omitted,
+                    rule: .protectedCommitment,
+                    missionID: mission.id,
+                    title: mission.title,
+                    explanation: "The linked workout program is not both user-approved and active, so no replacement session was generated."
+                )
+                continue
+            }
+            if let program, program.sessionTemplates.isEmpty {
+                unscheduledMissionIDs.append(mission.id)
+                addDecision(
+                    kind: .omitted,
+                    rule: .protectedCommitment,
+                    missionID: mission.id,
+                    title: mission.title,
+                    explanation: "The approved program has no session templates, so no gym mission was invented."
+                )
+                continue
+            }
+            let selectedSessions = program.map {
+                WorkoutPlanning.nextSessions(
+                    in: $0,
+                    after: input.workoutLogs,
+                    count: selectedDays.count + (recoveryWindow == nil ? 0 : 1)
+                )
+            } ?? []
+            var sessionOffset = 0
             for day in selectedDays {
                 let existingForDay = existing.first(where: {
                     calendar.isDate($0.start, inSameDayAs: day)
@@ -655,11 +1005,61 @@ private final class Planner {
                    blocks.contains(where: {
                        $0.id == existingForDay.id
                    }) {
+                    if program != nil {
+                        sessionOffset += 1
+                    }
                     continue
+                }
+                var scheduledMission = mission
+                var workoutMetadata: ScheduledWorkoutMetadata?
+                if let program,
+                   selectedSessions.indices.contains(sessionOffset) {
+                    var session = selectedSessions[sessionOffset]
+                    if let existingMetadata = existingForDay?.workout,
+                       existingMetadata.programID == program.id,
+                       let preservedSession = program.sessionTemplates
+                        .first(where: {
+                            $0.id == existingMetadata.sessionTemplateID
+                        }) {
+                        session = preservedSession
+                    }
+                    let blockedIDs = WorkoutPlanning.blockedExerciseIDs(
+                        in: session,
+                        painFlags: input.painFlags
+                    )
+                    var exerciseIDs = session.exercises
+                        .map(\.id)
+                        .filter { !blockedIDs.contains($0) }
+                    var shortened = false
+                    if let preserved = existingForDay?.workout,
+                       preserved.programID == program.id,
+                       preserved.sessionTemplateID == session.id,
+                       preserved.isShortened {
+                        exerciseIDs = preserved.exerciseIDs.filter {
+                            exerciseIDs.contains($0)
+                        }
+                        shortened = true
+                    }
+                    scheduledMission = workoutMission(
+                        base: mission,
+                        session: session,
+                        exerciseIDs: exerciseIDs,
+                        shortenedDuration: shortened
+                            ? existingForDay?.durationMinutes
+                            : nil
+                    )
+                    workoutMetadata = ScheduledWorkoutMetadata(
+                        programID: program.id,
+                        sessionTemplateID: session.id,
+                        exerciseIDs: exerciseIDs,
+                        blockedExerciseIDs: blockedIDs,
+                        isShortened: shortened
+                    )
+                    sessionOffset += 1
                 }
                 candidates.append(
                     Candidate(
-                        mission: mission,
+                        mission: scheduledMission,
                         routineID: nil,
                         occurrenceKey: "workout.\(workout.id.rawValue.uuidString).\(dayKey(day))",
                         stage: 3,
@@ -671,7 +1071,11 @@ private final class Planner {
                         earliest: horizonStart,
                         latest: horizonEnd,
                         existingBlock: existingForDay,
-                        repeatedMissCause: latestMissCause(for: mission)
+                        repeatedMissCause: latestMissCause(for: mission),
+                        workout: workoutMetadata,
+                        workoutSequence: workoutMetadata == nil
+                            ? nil
+                            : sessionOffset - 1
                     )
                 )
             }
@@ -680,9 +1084,33 @@ private final class Planner {
                     awakeEnd(for: day) > recoveryWindow.earliest
                         && awakeStart(for: day) < recoveryWindow.latest
                 }
+                var scheduledMission = mission
+                var workoutMetadata: ScheduledWorkoutMetadata?
+                if let program,
+                   selectedSessions.indices.contains(sessionOffset) {
+                    let session = selectedSessions[sessionOffset]
+                    let blockedIDs = WorkoutPlanning.blockedExerciseIDs(
+                        in: session,
+                        painFlags: input.painFlags
+                    )
+                    let exerciseIDs = session.exercises
+                        .map(\.id)
+                        .filter { !blockedIDs.contains($0) }
+                    scheduledMission = workoutMission(
+                        base: mission,
+                        session: session,
+                        exerciseIDs: exerciseIDs
+                    )
+                    workoutMetadata = ScheduledWorkoutMetadata(
+                        programID: program.id,
+                        sessionTemplateID: session.id,
+                        exerciseIDs: exerciseIDs,
+                        blockedExerciseIDs: blockedIDs
+                    )
+                }
                 candidates.append(
                     Candidate(
-                        mission: mission,
+                        mission: scheduledMission,
                         routineID: nil,
                         occurrenceKey: "workout.\(workout.id.rawValue.uuidString).recovery.\(timestampKey(recoveryWindow.earliest))",
                         stage: 3,
@@ -692,12 +1120,60 @@ private final class Planner {
                         earliest: recoveryWindow.earliest,
                         latest: recoveryWindow.latest,
                         existingBlock: nil,
-                        repeatedMissCause: latestMissCause(for: mission)
+                        repeatedMissCause: latestMissCause(for: mission),
+                        workout: workoutMetadata,
+                        workoutSequence: workoutMetadata == nil
+                            ? nil
+                            : sessionOffset
                     )
                 )
             }
         }
         return candidates
+    }
+
+    private func workoutMission(
+        base: Mission,
+        session: WorkoutSessionTemplate,
+        exerciseIDs: [EntityID],
+        shortenedDuration: Int? = nil
+    ) -> Mission {
+        var mission = base
+        let exercises = session.exercises.filter {
+            exerciseIDs.contains($0.id)
+        }
+        mission.title = session.title
+        mission.miniGoals = exercises.map { exercise in
+            MissionStep(
+                id: exercise.id,
+                title: "\(exercise.title) · \(exercise.sets.count) sets"
+            )
+        }
+        mission.estimatedDurationMinutes = max(
+            shortenedDuration ?? session.estimatedDurationMinutes,
+            10
+        )
+        mission.minimumUsefulBlockMinutes = min(
+            mission.minimumUsefulBlockMinutes,
+            mission.estimatedDurationMinutes
+        )
+        mission.bodyAreaTags = Array(
+            Set(exercises.flatMap(\.bodyAreaTags))
+        ).sorted()
+        if exercises.contains(where: { $0.physicalLoad == .heavy }) {
+            mission.physicalLoad = .heavy
+        } else if exercises.contains(where: {
+            $0.physicalLoad == .moderate
+        }) {
+            mission.physicalLoad = .moderate
+        } else if exercises.contains(where: {
+            $0.physicalLoad == .light
+        }) {
+            mission.physicalLoad = .light
+        } else {
+            mission.physicalLoad = .none
+        }
+        return mission
     }
 
     private func routineCandidates(includeTriggered: Bool) -> [Candidate] {
@@ -725,6 +1201,15 @@ private final class Planner {
                     routine,
                     nominalDate: nominal
                 )
+                let supermarketShift = compatibleSupermarketShift(
+                    for: routine,
+                    window: defaultWindow
+                )
+                if supermarketShift != nil {
+                    mission.travelBeforeMinutes = 0
+                    mission.travelAfterMinutes =
+                        input.profile.transitions.workTravelEachWayMinutes
+                }
                 if let override = input.dueWindowOverrides[mission.id] {
                     mission.dueWindow = override
                 }
@@ -754,13 +1239,21 @@ private final class Planner {
                         mission: mission,
                         routineID: routine.id,
                         occurrenceKey: "routine.\(routine.id.rawValue.uuidString).\(timestampKey(nominal))",
-                        stage: stage(for: routine),
+                        stage: supermarketShift != nil
+                            ? min(stage(for: routine), 2)
+                            : isShoppingRoutine(routine)
+                                && !input.shoppingItems.isEmpty
+                                ? min(stage(for: routine), 6)
+                                : stage(for: routine),
                         preferredDayStarts: eligibleDays.isEmpty
                             ? [calendar.startOfDay(for: nominal)]
-                            : eligibleDays,
+                            : supermarketShift.map {
+                                [calendar.startOfDay(for: $0.end)]
+                            } ?? eligibleDays,
                         preferredStartMinute: isTriggered
                             ? nil
-                            : routinePreferredMinute(routine),
+                            : supermarketShift.map(minuteOfDay)
+                                ?? routinePreferredMinute(routine),
                         earliest: window.start,
                         latest: window.end,
                         existingBlock: existing,
@@ -831,6 +1324,16 @@ private final class Planner {
                     mission: candidate.mission,
                     start: missionStart,
                     end: end
+                ),
+                !violatesPostMatchRestriction(
+                    mission: candidate.mission,
+                    start: missionStart,
+                    end: end
+                ),
+                !violatesFootballTrainingLoad(
+                    mission: candidate.mission,
+                    start: missionStart,
+                    end: end
                 )
             else {
                 return nil
@@ -842,31 +1345,47 @@ private final class Planner {
     private func nominalDates(for routine: Routine) -> [Date] {
         switch routine.recurrence.frequency {
         case .daily:
-            let anchor = calendar.date(
+            let anchor = routine.anchorDate.map {
+                calendar.startOfDay(for: $0)
+            } ?? calendar.date(
                 from: DateComponents(year: 2001, month: 1, day: 1)
             ) ?? horizonStart
+            let interval = routine.flexibleCadence?.maximumDays
+                ?? routine.recurrence.interval
             return dayStarts.filter { day in
                 let offset = calendar.dateComponents(
                     [.day],
                     from: anchor,
                     to: day
                 ).day ?? 0
-                return offset.isMultiple(
-                    of: routine.recurrence.interval
-                )
+                return offset >= 0 && offset.isMultiple(of: interval)
             }
         case .weekly:
             return dayStarts.filter {
                 routine.recurrence.weekdays.contains(weekday(for: $0))
             }
         case .monthly:
-            // The durable routine model currently has no recurrence anchor.
-            // One occurrence at the horizon start is explicit and deterministic.
+            if let anchorDate = routine.anchorDate {
+                let anchor = calendar.startOfDay(for: anchorDate)
+                return dayStarts.filter { day in
+                    let months = calendar.dateComponents(
+                        [.month],
+                        from: anchor,
+                        to: day
+                    ).month ?? 0
+                    return months >= 0
+                        && months.isMultiple(
+                            of: routine.recurrence.interval
+                        )
+                        && calendar.component(.day, from: day)
+                            == calendar.component(.day, from: anchor)
+                }
+            }
             addConflict(
                 kind: .recurrenceAnchorMissing,
                 severity: .warning,
                 title: "\(routine.title) needs a monthly anchor",
-                explanation: "The routine model does not yet store a last-completed or calendar-day anchor, so the planner uses the first day of this horizon and reports the assumption.",
+                explanation: "Set an anchor date so the monthly cadence has a deterministic calendar day. Until then, the planner uses the first day of this horizon and reports the assumption.",
                 start: horizonStart,
                 end: horizonEnd
             )
@@ -901,6 +1420,9 @@ private final class Planner {
             )
         }
         let day = calendar.startOfDay(for: nominalDate)
+        let flexibleLeadDays = routine.flexibleCadence.map {
+            max($0.maximumDays - $0.minimumDays, 0)
+        } ?? 0
         if let preferred = routine.recurrence.preferredStartMinute,
            let preferredDate = date(on: day, minute: preferred) {
             let halfWindow = routine.dueWindowMinutes / 2
@@ -924,17 +1446,26 @@ private final class Planner {
                 )
             )
         }
-        let start = awakeStart(for: day)
+        let flexibleStartDay = calendar.date(
+            byAdding: .day,
+            value: -flexibleLeadDays,
+            to: day
+        ) ?? day
+        let start = max(awakeStart(for: flexibleStartDay), horizonStart)
+        let nominalStart = awakeStart(for: day)
         return DateInterval(
             start: start,
             end: min(
-                start.addingTimeInterval(
-                    TimeInterval(
-                        (
-                            routine.dueWindowMinutes
-                                + routine.estimatedDurationMinutes
-                        ) * 60
-                    )
+                min(
+                    nominalStart.addingTimeInterval(
+                        TimeInterval(
+                            (
+                                routine.dueWindowMinutes
+                                    + routine.estimatedDurationMinutes
+                            ) * 60
+                        )
+                    ),
+                    awakeEnd(for: day)
                 ),
                 horizonEnd
             )
@@ -951,6 +1482,17 @@ private final class Planner {
             ),
             category: routine.category,
             title: routine.title,
+            miniGoals: isShoppingRoutine(routine)
+                ? input.shoppingItems.map {
+                    MissionStep(
+                        id: $0.id,
+                        title: [$0.quantity, $0.title]
+                            .compactMap { $0 }
+                            .joined(separator: " · "),
+                        isCompleted: $0.isCompleted
+                    )
+                }
+                : [],
             rigidity: routine.rigidity,
             importance: routine.rigidity == .protected ? .high : .normal,
             urgency: .normal,
@@ -1026,6 +1568,19 @@ private final class Planner {
                 conflictKind: .recoveryRestricted,
                 rule: .painRestriction,
                 explanation: "Active \(pain.bodyArea) pain blocks work that materially loads the affected area until explicit reassessment."
+            )
+            return
+        }
+        if let workout = candidate.workout,
+           workout.exerciseIDs.isEmpty {
+            let explanation = workout.blockedExerciseIDs.isEmpty
+                ? "The approved session has no executable exercises, so the planner did not invent a replacement."
+                : "Every exercise in this approved session materially loads an area with an active pain flag. The session stays blocked until explicit reassessment or clearance."
+            omit(
+                candidate,
+                conflictKind: .recoveryRestricted,
+                rule: .painRestriction,
+                explanation: explanation
             )
             return
         }
@@ -1130,14 +1685,29 @@ private final class Planner {
                 newStart: missionStart
             )
         }
+        if let workout = candidate.workout,
+           !workout.blockedExerciseIDs.isEmpty {
+            addDecision(
+                kind: .recoveryAdjusted,
+                rule: .painRestriction,
+                missionID: candidate.mission.id,
+                blockID: missionBlock?.id,
+                title: candidate.mission.title,
+                explanation: "\(workout.blockedExerciseIDs.count) materially affected exercise\(workout.blockedExerciseIDs.count == 1 ? " was" : "s were") kept out of this occurrence. The approved template was not changed.",
+                newStart: missionStart
+            )
+        }
     }
 
     private func findMissionStart(for candidate: Candidate) -> Date? {
+        if let bundled = compatibleBundledStart(for: candidate) {
+            return bundled
+        }
         let spec = transitionSpec(for: candidate.mission)
         let candidateDays = candidate.preferredDayStarts.isEmpty
             ? dayStarts
             : candidate.preferredDayStarts
-        for day in candidateDays.sorted() {
+        for day in candidateDays {
             var earliest = awakeStart(for: day).addingTimeInterval(
                 TimeInterval(spec.beforeMinutes * 60)
             )
@@ -1244,6 +1814,17 @@ private final class Planner {
            ) > latest {
             return false
         }
+        if candidate.workout != nil,
+           blocks.contains(where: {
+               $0.category == .gym
+                   && $0.kind == .mission
+                   && calendar.isDate(
+                       $0.start,
+                       inSameDayAs: missionStart
+                   )
+           }) {
+            return false
+        }
         if isDemandingPhysical(candidate.mission)
             && recoveryRestrictsToday()
             && calendar.isDate(
@@ -1253,6 +1834,28 @@ private final class Planner {
             return false
         }
         if violatesPreMatchRestriction(
+            mission: candidate.mission,
+            start: missionStart,
+            end: missionStart.addingTimeInterval(
+                TimeInterval(
+                    candidate.mission.estimatedDurationMinutes * 60
+                )
+            )
+        ) {
+            return false
+        }
+        if violatesPostMatchRestriction(
+            mission: candidate.mission,
+            start: missionStart,
+            end: missionStart.addingTimeInterval(
+                TimeInterval(
+                    candidate.mission.estimatedDurationMinutes * 60
+                )
+            )
+        ) {
+            return false
+        }
+        if violatesFootballTrainingLoad(
             mission: candidate.mission,
             start: missionStart,
             end: missionStart.addingTimeInterval(
@@ -1322,7 +1925,8 @@ private final class Planner {
                 rigidity: candidate.mission.rigidity,
                 start: missionStart,
                 end: missionEnd,
-                isImmutable: candidate.mission.isExternallyManaged
+                isImmutable: candidate.mission.isExternallyManaged,
+                workout: candidate.workout
             )
         )
         cursor = missionEnd
@@ -1481,6 +2085,7 @@ private final class Planner {
         end: Date
     ) -> Bool {
         guard
+            mission.category == .gym,
             mission.physicalLoad == .heavy,
             mission.bodyAreaTags.map(normalizedBodyArea).contains(where: {
                 lowerBodyAreas.contains($0)
@@ -1493,6 +2098,62 @@ private final class Planner {
             .contains(where: { match in
                 let restrictedStart = match.start.addingTimeInterval(-24 * 60 * 60)
                 return overlaps(start, end, restrictedStart, match.start)
+            })
+    }
+
+    private func violatesPostMatchRestriction(
+        mission: Mission,
+        start: Date,
+        end: Date
+    ) -> Bool {
+        guard mission.category == .gym,
+              isHeavyLowerBody(mission) else { return false }
+        return input.fixedCommitments
+            .filter { $0.category == .football && $0.isFootballMatch }
+            .contains(where: { match in
+                let restrictedEnd = match.end.addingTimeInterval(
+                    24 * 60 * 60
+                )
+                return overlaps(start, end, match.end, restrictedEnd)
+            })
+    }
+
+    private func violatesFootballTrainingLoad(
+        mission: Mission,
+        start: Date,
+        end: Date
+    ) -> Bool {
+        guard mission.category == .gym,
+              isHeavyLowerBody(mission) else { return false }
+        let fixedTrainingOnDay = input.fixedCommitments.contains {
+            $0.category == .football
+                && !$0.isFootballMatch
+                && (
+                    calendar.isDate($0.start, inSameDayAs: start)
+                        || overlaps(start, end, $0.start, $0.end)
+                )
+        }
+        if fixedTrainingOnDay { return true }
+        let workoutWeekday = weekday(for: start)
+        return input.routines.contains { routine in
+            guard
+                routine.isEnabled,
+                routine.category == .football,
+                routine.recurrence.frequency == .weekly
+            else {
+                return false
+            }
+            let weekdays = routine.recurrence.weekdays.isEmpty
+                ? input.profile.footballPattern.trainingWeekdays
+                : routine.recurrence.weekdays
+            return weekdays.contains(workoutWeekday)
+        }
+    }
+
+    private func isHeavyLowerBody(_ mission: Mission) -> Bool {
+        mission.physicalLoad == .heavy
+            && mission.bodyAreaTags.map(normalizedBodyArea).contains(where: {
+                lowerBodyAreas.contains($0)
             })
     }
 
@@ -1573,6 +2234,11 @@ private final class Planner {
 
     private func candidateOrder(_ left: Candidate, _ right: Candidate) -> Bool {
         if left.stage != right.stage { return left.stage < right.stage }
+        if let leftSequence = left.workoutSequence,
+           let rightSequence = right.workoutSequence,
+           leftSequence != rightSequence {
+            return leftSequence < rightSequence
+        }
         let leftOverride = left.mission.userPriorityOverride?.rawValue ?? 0
         let rightOverride = right.mission.userPriorityOverride?.rawValue ?? 0
         if leftOverride != rightOverride {
@@ -1704,6 +2370,239 @@ private final class Planner {
         return 0
     }
 
+    private func projectCandidates(for mission: Mission) -> [Candidate] {
+        let base = candidate(for: mission)
+        guard
+            let projectID = mission.projectID,
+            let project = input.projects.first(where: {
+                $0.id == projectID
+            })
+        else {
+            return blocks.contains(where: {
+                $0.missionID == mission.id && $0.kind == .mission
+            }) ? [] : [base]
+        }
+        let projectMissions = input.missions
+            .filter {
+                $0.projectID == projectID
+                    && $0.sourceRoutineID == nil
+                    && $0.status == .planned
+            }
+            .sorted(by: { $0.id < $1.id })
+        let baseBlockMinutes = max(
+            base.mission.estimatedDurationMinutes,
+            input.profile.planningPolicy.minimumFocusedBlockMinutes
+        )
+        let siblingBaseline = projectMissions
+            .filter { $0.id != mission.id }
+            .map {
+                max(
+                    $0.estimatedDurationMinutes,
+                    input.profile.planningPolicy
+                        .minimumFocusedBlockMinutes
+                )
+            }
+            .reduce(0, +)
+        let target = projectMissions.first?.id == mission.id
+            ? max(
+                project.weeklyPlannedMinutes - siblingBaseline,
+                baseBlockMinutes
+            )
+            : baseBlockMinutes
+        guard project.weeklyPlannedMinutes > 0 else {
+            return blocks.contains(where: {
+                $0.missionID == mission.id && $0.kind == .mission
+            }) ? [] : [base]
+        }
+        let completedMinutes = input.completionHistory
+            .filter {
+                $0.missionID == mission.id
+                    && ($0.status == .completed || $0.status == .partial)
+                    && $0.completedAt >= horizonStart
+                    && $0.completedAt < horizonEnd
+            }
+            .map(\.actualDurationMinutes)
+            .reduce(0, +)
+        let lockedMinutes = blocks
+            .filter {
+                $0.missionID == mission.id && $0.kind == .mission
+            }
+            .map(\.durationMinutes)
+            .reduce(0, +)
+        let remaining = max(target - completedMinutes - lockedMinutes, 0)
+        guard remaining > 0 else { return [] }
+        let blockMinutes = baseBlockMinutes
+        let count = min(
+            Int(ceil(Double(remaining) / Double(blockMinutes))),
+            max(dayStarts.count * 2, 1)
+        )
+        let existing = input.existingPlan
+            .filter { existingBlock in
+                existingBlock.missionID == mission.id
+                    && existingBlock.kind == .mission
+                    && existingBlock.end > input.currentTime
+                    && !blocks.contains(where: {
+                        $0.id == existingBlock.id
+                    })
+            }
+            .sorted(by: blockOrder)
+        let availableDays = dayStarts.filter {
+            awakeEnd(for: $0) > input.currentTime
+        }
+        return (0..<count).map { index in
+            var result = base
+            result.occurrenceKey =
+                "project.\(mission.id.rawValue.uuidString).\(index)"
+            if !availableDays.isEmpty {
+                let preferredIndex = index % availableDays.count
+                result.preferredDayStarts =
+                    Array(availableDays[preferredIndex...])
+                    + Array(availableDays[..<preferredIndex])
+            }
+            result.existingBlock = index < existing.count
+                ? existing[index]
+                : nil
+            if index == count - 1, remaining % blockMinutes != 0 {
+                result.mission.estimatedDurationMinutes = max(
+                    remaining % blockMinutes,
+                    result.mission.minimumUsefulBlockMinutes
+                )
+            }
+            return result
+        }
+    }
+
+    private func isShoppingRoutine(_ routine: Routine) -> Bool {
+        let title = routine.title.lowercased()
+        return title.contains("grocer") || title.contains("shopping")
+    }
+
+    private func isSupermarketCommitment(
+        _ commitment: FixedCommitment
+    ) -> Bool {
+        let context = (
+            [commitment.title, commitment.location ?? ""]
+                + commitment.contextTags
+        )
+        .joined(separator: " ")
+        .lowercased()
+        return context.contains("supermarket")
+            || context.contains("grocery")
+            || context.contains("aldi")
+            || context.contains("lidl")
+    }
+
+    private func compatibleSupermarketShift(
+        for routine: Routine,
+        window: DateInterval
+    ) -> FixedCommitment? {
+        guard isShoppingRoutine(routine) else { return nil }
+        return input.fixedCommitments
+            .filter {
+                $0.category == .work
+                    && isSupermarketCommitment($0)
+                    && $0.end >= window.start
+                    && $0.end <= window.end
+                    && $0.end.addingTimeInterval(
+                        TimeInterval(
+                            (
+                                routine.estimatedDurationMinutes
+                                    + input.profile.transitions
+                                        .workTravelEachWayMinutes
+                            ) * 60
+                        )
+                    ) <= awakeEnd(
+                        for: calendar.startOfDay(for: $0.end)
+                    )
+            }
+            .sorted(by: fixedOrder)
+            .first
+    }
+
+    private func canBundleShopping(after commitment: FixedCommitment) -> Bool {
+        guard
+            commitment.category == .work,
+            isSupermarketCommitment(commitment)
+        else {
+            return false
+        }
+        return input.routines.filter(\.isEnabled).contains { routine in
+            guard isShoppingRoutine(routine) else { return false }
+            return nominalDates(for: routine).contains { nominal in
+                let window = routineWindow(routine, nominalDate: nominal)
+                return commitment.end >= window.start
+                    && commitment.end <= window.end
+                    && commitment.end.addingTimeInterval(
+                        TimeInterval(
+                            (
+                                routine.estimatedDurationMinutes
+                                    + input.profile.transitions
+                                        .workTravelEachWayMinutes
+                            ) * 60
+                        )
+                    ) <= awakeEnd(
+                        for: calendar.startOfDay(for: commitment.end)
+                    )
+            }
+        }
+    }
+
+    private func compatibleBundledStart(
+        for candidate: Candidate
+    ) -> Date? {
+        guard
+            let routineID = candidate.routineID,
+            let routine = input.routines.first(where: { $0.id == routineID })
+        else {
+            return nil
+        }
+        if let shift = candidate.preferredDayStarts.first.flatMap({ day in
+            input.fixedCommitments.first(where: {
+                calendar.isDate($0.end, inSameDayAs: day)
+                    && isSupermarketCommitment($0)
+                    && isShoppingRoutine(routine)
+            })
+        }), canPlace(candidate, missionStart: shift.end) {
+            return shift.end
+        }
+        let compatibleIDs = Set(routine.compatibleRoutineIDs)
+        guard !compatibleIDs.isEmpty else { return nil }
+        let compatibleBlocks = blocks
+            .filter { block in
+                guard
+                    block.kind == .mission,
+                    let missionID = block.missionID,
+                    let otherMission = generatedMissions.first(where: {
+                        $0.id == missionID
+                    }),
+                    let otherRoutineID = otherMission.sourceRoutineID
+                else {
+                    return false
+                }
+                return compatibleIDs.contains(otherRoutineID)
+            }
+            .sorted(by: blockOrder)
+        for block in compatibleBlocks {
+            if canPlace(candidate, missionStart: block.end) {
+                return block.end
+            }
+            let before = block.start.addingTimeInterval(
+                -TimeInterval(
+                    candidate.mission.estimatedDurationMinutes * 60
+                )
+            )
+            if canPlace(candidate, missionStart: before) {
+                return before
+            }
+        }
+        return nil
+    }
+
+    private func minuteOfDay(_ commitment: FixedCommitment) -> Int {
+        calendar.component(.hour, from: commitment.end) * 60
+            + calendar.component(.minute, from: commitment.end)
+    }
+
     private func routinePreferredMinute(_ routine: Routine) -> Int? {
         if let preferred = routine.recurrence.preferredStartMinute {
             return preferred
@@ -1739,10 +2638,13 @@ private final class Planner {
     // MARK: Explanations and conflicts
 
     private func decisionRule(for candidate: Candidate) -> SchedulingRule {
-        if candidate.routineID != nil {
+        if let routineID = candidate.routineID {
             let title = candidate.mission.title.lowercased()
             if title.contains("grocer")
-                || title.contains("meal preparation") {
+                || title.contains("meal preparation")
+                || input.routines.first(where: {
+                    $0.id == routineID
+                })?.compatibleRoutineIDs.isEmpty == false {
                 return .compatibleBundling
             }
             return .routineDueWindow
@@ -1759,9 +2661,33 @@ private final class Planner {
     private func placementExplanation(for candidate: Candidate) -> String {
         if candidate.routineID != nil {
             let title = candidate.mission.title.lowercased()
+            if title.contains("grocer") || title.contains("shopping") {
+                let itemText = input.shoppingItems.isEmpty
+                    ? ""
+                    : " for \(input.shoppingItems.count) pending item\(input.shoppingItems.count == 1 ? "" : "s")"
+                if input.fixedCommitments.contains(where: {
+                    isSupermarketCommitment($0)
+                        && calendar.isDate(
+                            $0.end,
+                            inSameDayAs: candidate.preferredDayStarts.first
+                                ?? horizonStart
+                        )
+                }) {
+                    return "Combined shopping\(itemText) with a supermarket work shift inside the routine's due window to avoid a separate trip."
+                }
+                return "Placed shopping\(itemText) inside its flexible due window and kept compatible household work close by."
+            }
             if title.contains("grocer")
                 || title.contains("meal preparation") {
                 return "Placed inside its due window beside compatible food and household work to reduce fragmentation."
+            }
+            if let routine = candidate.routineID.flatMap({ routineID in
+                input.routines.first(where: { $0.id == routineID })
+            }), !routine.compatibleRoutineIDs.isEmpty {
+                let note = routine.bundlingNote.isEmpty
+                    ? ""
+                    : " \(routine.bundlingNote)"
+                return "Placed inside its due window near compatible recurring work to reduce fragmentation." + note
             }
             return "Placed within the routine's flexible due window after harder constraints."
         }

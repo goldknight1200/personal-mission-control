@@ -46,6 +46,8 @@ public struct Project: Codable, Equatable, Identifiable, Sendable {
     public var status: ProjectStatus
     public var targetDate: Date?
     public var priorityOverride: PriorityLevel?
+    public var weeklyPlannedMinutes: Int
+    public var lastActiveReviewAt: Date?
 
     public init(
         id: EntityID = EntityID(),
@@ -54,7 +56,9 @@ public struct Project: Codable, Equatable, Identifiable, Sendable {
         detail: String = "",
         status: ProjectStatus,
         targetDate: Date? = nil,
-        priorityOverride: PriorityLevel? = nil
+        priorityOverride: PriorityLevel? = nil,
+        weeklyPlannedMinutes: Int = 0,
+        lastActiveReviewAt: Date? = nil
     ) {
         self.id = id
         self.goalID = goalID
@@ -63,6 +67,42 @@ public struct Project: Codable, Equatable, Identifiable, Sendable {
         self.status = status
         self.targetDate = targetDate
         self.priorityOverride = priorityOverride
+        self.weeklyPlannedMinutes = max(weeklyPlannedMinutes, 0)
+        self.lastActiveReviewAt = lastActiveReviewAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case goalID
+        case title
+        case detail
+        case status
+        case targetDate
+        case priorityOverride
+        case weeklyPlannedMinutes
+        case lastActiveReviewAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(EntityID.self, forKey: .id)
+        goalID = try container.decodeIfPresent(EntityID.self, forKey: .goalID)
+        title = try container.decode(String.self, forKey: .title)
+        detail = try container.decode(String.self, forKey: .detail)
+        status = try container.decode(ProjectStatus.self, forKey: .status)
+        targetDate = try container.decodeIfPresent(Date.self, forKey: .targetDate)
+        priorityOverride = try container.decodeIfPresent(
+            PriorityLevel.self,
+            forKey: .priorityOverride
+        )
+        weeklyPlannedMinutes = try container.decodeIfPresent(
+            Int.self,
+            forKey: .weeklyPlannedMinutes
+        ) ?? 0
+        lastActiveReviewAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .lastActiveReviewAt
+        )
     }
 }
 
@@ -107,6 +147,9 @@ public struct Mission: Codable, Equatable, Identifiable, Sendable {
     public var isExternallyManaged: Bool
     public var userPriorityOverride: PriorityLevel?
     public var status: MissionStatus
+    public var plannedMealID: EntityID?
+    public var mealTemplateID: EntityID?
+    public var nutritionPlanningNeedID: EntityID?
 
     public init(
         id: EntityID = EntityID(),
@@ -136,7 +179,10 @@ public struct Mission: Codable, Equatable, Identifiable, Sendable {
         allowsSplitting: Bool = false,
         isExternallyManaged: Bool = false,
         userPriorityOverride: PriorityLevel? = nil,
-        status: MissionStatus = .planned
+        status: MissionStatus = .planned,
+        plannedMealID: EntityID? = nil,
+        mealTemplateID: EntityID? = nil,
+        nutritionPlanningNeedID: EntityID? = nil
     ) {
         precondition(estimatedDurationMinutes > 0)
         precondition(minimumUsefulBlockMinutes > 0)
@@ -168,6 +214,9 @@ public struct Mission: Codable, Equatable, Identifiable, Sendable {
         self.isExternallyManaged = isExternallyManaged
         self.userPriorityOverride = userPriorityOverride
         self.status = status
+        self.plannedMealID = plannedMealID
+        self.mealTemplateID = mealTemplateID
+        self.nutritionPlanningNeedID = nutritionPlanningNeedID
     }
 }
 
@@ -182,6 +231,7 @@ public struct ScheduleBlock: Codable, Equatable, Identifiable, Sendable {
     public var start: Date
     public var end: Date
     public var isImmutable: Bool
+    public var workout: ScheduledWorkoutMetadata?
 
     public init(
         id: EntityID = EntityID(),
@@ -193,7 +243,8 @@ public struct ScheduleBlock: Codable, Equatable, Identifiable, Sendable {
         rigidity: MissionRigidity,
         start: Date,
         end: Date,
-        isImmutable: Bool = false
+        isImmutable: Bool = false,
+        workout: ScheduledWorkoutMetadata? = nil
     ) {
         precondition(end > start)
         self.id = id
@@ -206,6 +257,7 @@ public struct ScheduleBlock: Codable, Equatable, Identifiable, Sendable {
         self.start = start
         self.end = end
         self.isImmutable = isImmutable
+        self.workout = workout
     }
 
     public var durationMinutes: Int {
@@ -223,6 +275,7 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
     public var externalIdentifier: String?
     public var isExternallyManaged: Bool
     public var isFootballMatch: Bool
+    public var contextTags: [String]
 
     public init(
         id: EntityID = EntityID(),
@@ -233,7 +286,8 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
         location: String? = nil,
         externalIdentifier: String? = nil,
         isExternallyManaged: Bool = false,
-        isFootballMatch: Bool = false
+        isFootballMatch: Bool = false,
+        contextTags: [String] = []
     ) {
         precondition(end > start)
         self.id = id
@@ -245,6 +299,7 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
         self.externalIdentifier = externalIdentifier
         self.isExternallyManaged = isExternallyManaged
         self.isFootballMatch = isFootballMatch
+        self.contextTags = contextTags
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -257,6 +312,7 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
         case externalIdentifier
         case isExternallyManaged
         case isFootballMatch
+        case contextTags
     }
 
     public init(from decoder: Decoder) throws {
@@ -279,6 +335,10 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
             Bool.self,
             forKey: .isFootballMatch
         ) ?? false
+        contextTags = try container.decodeIfPresent(
+            [String].self,
+            forKey: .contextTags
+        ) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -298,6 +358,19 @@ public struct FixedCommitment: Codable, Equatable, Identifiable, Sendable {
             forKey: .isExternallyManaged
         )
         try container.encode(isFootballMatch, forKey: .isFootballMatch)
+        try container.encode(contextTags, forKey: .contextTags)
+    }
+}
+
+public struct FlexibleCadence: Codable, Equatable, Sendable {
+    public var minimumDays: Int
+    public var maximumDays: Int
+
+    public init(minimumDays: Int, maximumDays: Int) {
+        precondition(minimumDays > 0)
+        precondition(maximumDays >= minimumDays)
+        self.minimumDays = minimumDays
+        self.maximumDays = maximumDays
     }
 }
 
@@ -334,6 +407,11 @@ public struct Routine: Codable, Equatable, Identifiable, Sendable {
     public var dueWindowMinutes: Int
     public var isEnabled: Bool
     public var note: String
+    public var anchorDate: Date?
+    public var flexibleCadence: FlexibleCadence?
+    public var compatibleRoutineIDs: [EntityID]
+    public var allowsCompatibleOverlap: Bool
+    public var bundlingNote: String
 
     public init(
         id: EntityID = EntityID(),
@@ -344,7 +422,12 @@ public struct Routine: Codable, Equatable, Identifiable, Sendable {
         estimatedDurationMinutes: Int,
         dueWindowMinutes: Int,
         isEnabled: Bool = true,
-        note: String = ""
+        note: String = "",
+        anchorDate: Date? = nil,
+        flexibleCadence: FlexibleCadence? = nil,
+        compatibleRoutineIDs: [EntityID] = [],
+        allowsCompatibleOverlap: Bool = false,
+        bundlingNote: String = ""
     ) {
         self.id = id
         self.title = title
@@ -355,5 +438,91 @@ public struct Routine: Codable, Equatable, Identifiable, Sendable {
         self.dueWindowMinutes = dueWindowMinutes
         self.isEnabled = isEnabled
         self.note = note
+        self.anchorDate = anchorDate
+        self.flexibleCadence = flexibleCadence
+        self.compatibleRoutineIDs = compatibleRoutineIDs
+        self.allowsCompatibleOverlap = allowsCompatibleOverlap
+        self.bundlingNote = bundlingNote
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case category
+        case rigidity
+        case recurrence
+        case estimatedDurationMinutes
+        case dueWindowMinutes
+        case isEnabled
+        case note
+        case anchorDate
+        case flexibleCadence
+        case compatibleRoutineIDs
+        case allowsCompatibleOverlap
+        case bundlingNote
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(EntityID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        category = try container.decode(
+            MissionCategory.self,
+            forKey: .category
+        )
+        rigidity = try container.decode(
+            MissionRigidity.self,
+            forKey: .rigidity
+        )
+        recurrence = try container.decode(
+            RecurrencePattern.self,
+            forKey: .recurrence
+        )
+        estimatedDurationMinutes = try container.decode(
+            Int.self,
+            forKey: .estimatedDurationMinutes
+        )
+        dueWindowMinutes = try container.decode(
+            Int.self,
+            forKey: .dueWindowMinutes
+        )
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        note = try container.decode(String.self, forKey: .note)
+        anchorDate = try container.decodeIfPresent(
+            Date.self,
+            forKey: .anchorDate
+        )
+        flexibleCadence = try container.decodeIfPresent(
+            FlexibleCadence.self,
+            forKey: .flexibleCadence
+        )
+        compatibleRoutineIDs = try container.decodeIfPresent(
+            [EntityID].self,
+            forKey: .compatibleRoutineIDs
+        ) ?? []
+        allowsCompatibleOverlap = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .allowsCompatibleOverlap
+        ) ?? false
+        bundlingNote = try container.decodeIfPresent(
+            String.self,
+            forKey: .bundlingNote
+        ) ?? ""
+    }
+}
+
+public struct ManualScheduleAdjustment: Codable, Equatable, Identifiable, Sendable {
+    public var id: EntityID
+    public var block: ScheduleBlock
+    public var createdAt: Date
+
+    public init(
+        id: EntityID = EntityID(),
+        block: ScheduleBlock,
+        createdAt: Date
+    ) {
+        self.id = id
+        self.block = block
+        self.createdAt = createdAt
     }
 }

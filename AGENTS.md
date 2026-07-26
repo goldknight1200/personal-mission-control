@@ -16,10 +16,16 @@ The checked-in Word prompt pack is reference material. Repository Markdown is th
 
 ## Current phase
 
-Phases 1 through 4 are present in source. Phase 2 supplies the production
+Phases 1 through 9 are present in source. Phase 2 supplies the production
 deterministic seven-day planner and minimal-change replanner used by Home,
-Plan, voice-command mutations, and active-execution recovery. Do not begin
-Phase 5 without an explicit request.
+Plan, voice-command mutations, and active-execution recovery. Phase 8 adds
+optional EventKit, HealthKit sleep, App Intents/App Shortcuts, and iCal
+adapters behind permission-neutral core protocols. Phase 9 adds optional
+strict-schema AI interpretation, on-device rota OCR, backup/deletion controls,
+and beta hardening without changing the deterministic scheduling authority.
+Do not claim production readiness until the documented Xcode, simulator,
+signed-device, provider-account, performance, accessibility, and beta gates
+have actually passed.
 
 ## Architecture rules
 

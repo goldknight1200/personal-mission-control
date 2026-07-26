@@ -53,6 +53,11 @@ struct MissionControlTabBar: View {
 }
 
 private struct MicrophoneCaptureButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var haloSize = 76
+    @ScaledMetric(relativeTo: .body) private var buttonSize = 62
+    @ScaledMetric(relativeTo: .body) private var iconSize = 25
+
     let isRecording: Bool
     let pressBegan: () -> Void
     let pressEnded: () -> Void
@@ -65,13 +70,13 @@ private struct MicrophoneCaptureButton: View {
             if isRecording {
                 Circle()
                     .fill(Color.red.opacity(0.16))
-                    .frame(width: 76, height: 76)
+                    .frame(width: haloSize, height: haloSize)
             }
 
             Image(systemName: isRecording ? "waveform" : "mic.fill")
-                .font(.system(size: 25, weight: .semibold))
+                .font(.system(size: iconSize, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 62, height: 62)
+                .frame(width: buttonSize, height: buttonSize)
                 .background(
                     Circle().fill(isRecording ? Color.red : Color.accentColor)
                 )
@@ -96,8 +101,14 @@ private struct MicrophoneCaptureButton: View {
                     pressEnded()
                 }
         )
-        .animation(.easeOut(duration: 0.16), value: isPressed)
-        .animation(.easeInOut(duration: 0.2), value: isRecording)
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.16),
+            value: isPressed
+        )
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.2),
+            value: isRecording
+        )
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(
@@ -163,7 +174,7 @@ struct SideMenu: View {
                 .padding(.vertical, 10)
             }
 
-            Text("Phase 4 · Active execution")
+            Text("Phase 9 · Local-first beta hardening")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .padding(22)
@@ -202,21 +213,21 @@ struct MenuPlaceholderView: View {
     private var availabilityMessage: String {
         switch destination {
         case .nutrition:
-            "Nutrition targets are editable in Profile. Full nutrition planning arrives in Phase 6."
+            ""
         case .training:
-            "Approved training program management arrives in Phase 7."
+            ""
         case .history:
             ""
         case .calendar:
-            "Calendar access is not connected yet. Integration arrives in Phase 8."
+            ""
         case .health:
-            "Health access is not connected yet. Integration arrives in Phase 8."
+            ""
         case .notifications:
             ""
         case .aiBehavior:
-            "No AI provider is used. Optional interpretation arrives in Phase 9."
+            ""
         case .appSettings:
-            "Additional app settings will appear as their local features are implemented."
+            ""
         case .profile, .appearance:
             ""
         }

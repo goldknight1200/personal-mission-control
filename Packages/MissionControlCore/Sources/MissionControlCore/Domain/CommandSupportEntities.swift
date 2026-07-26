@@ -1,9 +1,26 @@
 import Foundation
 
-public enum InventoryState: String, Codable, Equatable, Sendable {
+public enum InventoryState:
+    String,
+    CaseIterable,
+    Codable,
+    Equatable,
+    Identifiable,
+    Sendable
+{
     case available
     case low
     case empty
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .available: "Available"
+        case .low: "Low"
+        case .empty: "Out"
+        }
+    }
 }
 
 public struct InventoryItem: Codable, Equatable, Identifiable, Sendable {
@@ -11,6 +28,12 @@ public struct InventoryItem: Codable, Equatable, Identifiable, Sendable {
     public var name: String
     public var state: InventoryState
     public var quantityNote: String?
+    public var exactQuantity: Double?
+    public var quantityUnit: String?
+    public var mealsRemaining: Int?
+    public var lowQuantityThreshold: Double?
+    public var shoppingQuantity: String?
+    public var automaticallyAddToShopping: Bool
     public var updatedAt: Date
 
     public init(
@@ -18,13 +41,92 @@ public struct InventoryItem: Codable, Equatable, Identifiable, Sendable {
         name: String,
         state: InventoryState,
         quantityNote: String? = nil,
+        exactQuantity: Double? = nil,
+        quantityUnit: String? = nil,
+        mealsRemaining: Int? = nil,
+        lowQuantityThreshold: Double? = nil,
+        shoppingQuantity: String? = nil,
+        automaticallyAddToShopping: Bool = true,
         updatedAt: Date
     ) {
         self.id = id
         self.name = name
         self.state = state
         self.quantityNote = quantityNote
+        self.exactQuantity = exactQuantity
+        self.quantityUnit = quantityUnit
+        self.mealsRemaining = mealsRemaining
+        self.lowQuantityThreshold = lowQuantityThreshold
+        self.shoppingQuantity = shoppingQuantity
+        self.automaticallyAddToShopping = automaticallyAddToShopping
         self.updatedAt = updatedAt
+    }
+
+    public var quantityDescription: String {
+        if let mealsRemaining {
+            return "\(mealsRemaining) meal\(mealsRemaining == 1 ? "" : "s") remaining"
+        }
+        if let exactQuantity {
+            return "\(exactQuantity.formatted())\(quantityUnit.map { " \($0)" } ?? "")"
+        }
+        if let quantityNote, !quantityNote.isEmpty {
+            return quantityNote
+        }
+        switch state {
+        case .available: "Available"
+        case .low: "Low"
+        case .empty: "Out"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case state
+        case quantityNote
+        case exactQuantity
+        case quantityUnit
+        case mealsRemaining
+        case lowQuantityThreshold
+        case shoppingQuantity
+        case automaticallyAddToShopping
+        case updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(EntityID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        state = try container.decode(InventoryState.self, forKey: .state)
+        quantityNote = try container.decodeIfPresent(
+            String.self,
+            forKey: .quantityNote
+        )
+        exactQuantity = try container.decodeIfPresent(
+            Double.self,
+            forKey: .exactQuantity
+        )
+        quantityUnit = try container.decodeIfPresent(
+            String.self,
+            forKey: .quantityUnit
+        )
+        mealsRemaining = try container.decodeIfPresent(
+            Int.self,
+            forKey: .mealsRemaining
+        )
+        lowQuantityThreshold = try container.decodeIfPresent(
+            Double.self,
+            forKey: .lowQuantityThreshold
+        )
+        shoppingQuantity = try container.decodeIfPresent(
+            String.self,
+            forKey: .shoppingQuantity
+        )
+        automaticallyAddToShopping = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .automaticallyAddToShopping
+        ) ?? true
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }
 
@@ -34,19 +136,25 @@ public struct PainFlag: Codable, Equatable, Identifiable, Sendable {
     public var reportedAt: Date
     public var note: String
     public var isActive: Bool
+    public var clearedAt: Date?
+    public var clearanceNote: String?
 
     public init(
         id: EntityID = EntityID(),
         bodyArea: String,
         reportedAt: Date,
         note: String,
-        isActive: Bool = true
+        isActive: Bool = true,
+        clearedAt: Date? = nil,
+        clearanceNote: String? = nil
     ) {
         self.id = id
         self.bodyArea = bodyArea
         self.reportedAt = reportedAt
         self.note = note
         self.isActive = isActive
+        self.clearedAt = clearedAt
+        self.clearanceNote = clearanceNote
     }
 }
 
@@ -88,9 +196,13 @@ public enum ReplanReason: String, Codable, Hashable, Sendable {
     case fixedCommitmentAdded
     case fixedCommitmentChanged
     case projectPriorityRaised
+    case shoppingListChanged
+    case inventoryChanged
     case foodDeficit
     case repeatedMiss
     case recoveryChanged
+    case externalScheduleChanged
+    case manualReplan
 }
 
 public enum ReplanRequestStatus: String, Codable, Equatable, Sendable {

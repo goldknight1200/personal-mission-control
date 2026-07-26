@@ -30,7 +30,10 @@ final class CommandMutationApplicatorTests: XCTestCase {
         )
         XCTAssertEqual(result.snapshot.commandHistory.last, command)
         XCTAssertEqual(replanner.invocationCount, 1)
-        XCTAssertTrue(replanner.receivedRequests.isEmpty)
+        XCTAssertEqual(
+            replanner.receivedRequests.map(\.reason),
+            [.inventoryChanged]
+        )
     }
 
     func testMissionStartUsesCorrectedActualStart() throws {
@@ -56,6 +59,38 @@ final class CommandMutationApplicatorTests: XCTestCase {
             referenceDate.addingTimeInterval(-20 * 60)
         )
         XCTAssertEqual(result.replanRequests.map(\.reason), [.actualStartCorrected])
+    }
+
+    func testVoiceShoppingAdditionRefreshesPlanningInputs() throws {
+        let snapshot = MissionControlSeed.makeDemo(
+            referenceDate: referenceDate
+        )
+        let command = makeCommand(
+            mutations: [
+                .addChecklistItem(
+                    kind: .shopping,
+                    title: "Oat milk"
+                )
+            ]
+        )
+
+        let result = try CommandMutationApplicator(
+            replanner: RecordingReplanner()
+        ).apply(
+            command,
+            to: snapshot,
+            finalConfirmationProvided: true
+        )
+
+        XCTAssertEqual(
+            result.replanRequests.map(\.reason),
+            [.shoppingListChanged]
+        )
+        XCTAssertTrue(
+            result.snapshot.checklist(ofKind: .shopping)?
+                .items.contains(where: { $0.title == "Oat milk" })
+                == true
+        )
     }
 
     func testHighImpactCommandCannotApplyWithoutFinalConfirmation() {

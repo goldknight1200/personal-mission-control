@@ -169,6 +169,15 @@ Weekly consistency tracks football completed/planned, gym completed/target, proj
 - Never send raw HealthKit history, entire calendars, raw recordings, or unnecessary schedule context to a third party.
 - Secrets live in secure platform storage and never in source control.
 - EventKit, HealthKit, Speech, UserNotifications, App Intents/App Shortcuts, iCal, and optional image/OCR remain protocol-backed integrations.
+- Optional AI interpretation uses a user-configured HTTPS structured-command
+  provider. The app discloses and minimizes the exact request, keeps credentials
+  in Keychain, validates all output locally, and requires confirmation before
+  application. The provider never plans or writes storage directly.
+- Rota images are explicitly selected, processed on device, not retained, and
+  produce unselected candidate shifts plus ambiguity warnings.
+- The user can export a versioned local backup, validate and restore it, turn
+  off command-text retention, and delete local app data. Backups never contain
+  Keychain credentials, raw Health samples, or audio.
 
 ## Product success
 

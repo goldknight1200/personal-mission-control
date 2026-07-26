@@ -9,10 +9,11 @@ struct HomeView: View {
     let voiceFallback: () -> Void
 
     @State private var durationMission: Mission?
+    @State private var workoutBlock: ScheduleBlock?
 
     var body: some View {
         NavigationStack {
-            GeometryReader { geometry in
+            GeometryReader { _ in
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     let now = context.date
                     let todayStart = localCalendar.startOfDay(for: now)
@@ -37,7 +38,7 @@ struct HomeView: View {
                                 block: currentBlock,
                                 profile: model.snapshot.profile
                             )
-                            .frame(height: min(max(geometry.size.height * 0.28, 210), 270))
+                            .frame(minHeight: 210)
                             .frame(maxWidth: .infinity)
 
                             if DailyReflection.shouldShowMorning(
@@ -99,6 +100,10 @@ struct HomeView: View {
                                 CurrentMissionCard(
                                     block: currentBlock,
                                     mission: currentMission,
+                                    workoutSession:
+                                        model.workoutSession(
+                                            for: currentBlock
+                                        ),
                                     profile: model.snapshot.profile,
                                     toggleStep: { stepID in
                                         guard let missionID = currentMission?.id else { return }
@@ -123,6 +128,9 @@ struct HomeView: View {
                                     },
                                     adjustDuration: {
                                         durationMission = currentMission
+                                    },
+                                    openWorkout: {
+                                        workoutBlock = currentBlock
                                     }
                                 )
                             } else {
@@ -205,6 +213,9 @@ struct HomeView: View {
                 }
             )
             .presentationDetents([.height(320)])
+        }
+        .sheet(item: $workoutBlock) { block in
+            WorkoutExecutionView(model: model, block: block)
         }
     }
 
@@ -408,6 +419,10 @@ private struct EveningSummaryCard: View {
 }
 
 private struct CurrentTimeOrb: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var orbSize = 192
+    @ScaledMetric(relativeTo: .largeTitle) private var timeSize = 45
+
     let now: Date
     let block: ScheduleBlock?
     let profile: UserProfile
@@ -432,11 +447,21 @@ private struct CurrentTimeOrb: View {
                     style: StrokeStyle(lineWidth: 13, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.3), value: progress)
+                .animation(
+                    reduceMotion ? nil : .linear(duration: 0.3),
+                    value: progress
+                )
 
             VStack(spacing: 6) {
                 Text(MissionControlFormatters.time(now, profile: profile))
-                    .font(.system(size: 45, weight: .semibold, design: .rounded).monospacedDigit())
+                    .font(
+                        .system(
+                            size: timeSize,
+                            weight: .semibold,
+                            design: .rounded
+                        )
+                        .monospacedDigit()
+                    )
                     .minimumScaleFactor(0.75)
 
                 Text(block == nil ? "Open time" : "Now")
@@ -456,7 +481,7 @@ private struct CurrentTimeOrb: View {
             }
             .padding(24)
         }
-        .frame(width: 192, height: 192)
+        .frame(width: orbSize, height: orbSize)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -472,11 +497,13 @@ private struct CurrentTimeOrb: View {
 private struct CurrentMissionCard: View {
     let block: ScheduleBlock
     let mission: Mission?
+    let workoutSession: WorkoutSessionTemplate?
     let profile: UserProfile
     let toggleStep: (EntityID) -> Void
     let complete: () -> Void
     let partial: () -> Void
     let adjustDuration: () -> Void
+    let openWorkout: () -> Void
 
     private var accent: Color { profile.color(for: block.category) }
 
@@ -496,7 +523,38 @@ private struct CurrentMissionCard: View {
                 .font(.title2.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let mission, !mission.miniGoals.isEmpty {
+            if let workoutSession {
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(
+                        workoutSession.exercises.filter {
+                            block.workout?.exerciseIDs.contains($0.id)
+                                ?? false
+                        }
+                    ) { exercise in
+                        HStack {
+                            Image(systemName: "circle")
+                                .foregroundStyle(accent)
+                            Text(exercise.title)
+                            Spacer()
+                            Text(
+                                "\(exercise.sets.count) × \(exercise.sets.first?.targetRepText ?? "—")"
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                        .font(.subheadline)
+                    }
+                    if let blockedCount =
+                        block.workout?.blockedExerciseIDs.count,
+                       blockedCount > 0 {
+                        Label(
+                            "\(blockedCount) affected movement\(blockedCount == 1 ? "" : "s") held out",
+                            systemImage: "shield.lefthalf.filled"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    }
+                }
+            } else if let mission, !mission.miniGoals.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(mission.miniGoals) { step in
                         Button {
@@ -535,16 +593,29 @@ private struct CurrentMissionCard: View {
                             .font(.subheadline.weight(.semibold))
                     }
                 } else {
-                    HStack {
-                        Button("Partial", action: partial)
-                            .buttonStyle(.bordered)
-                        Button(action: complete) {
-                            Label("Complete", systemImage: "checkmark")
+                    if workoutSession != nil {
+                        Button(action: openWorkout) {
+                            Label(
+                                "Open workout",
+                                systemImage: "figure.strengthtraining.traditional"
+                            )
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(accent)
+                    } else {
+                        HStack {
+                            Button("Partial", action: partial)
+                                .buttonStyle(.bordered)
+                            Button(action: complete) {
+                                Label("Complete", systemImage: "checkmark")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(accent)
+                        }
                     }
                 }
             } else if block.kind.isTransition {

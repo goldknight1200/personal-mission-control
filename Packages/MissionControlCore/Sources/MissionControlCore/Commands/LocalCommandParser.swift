@@ -94,6 +94,82 @@ public struct LocalCommandParser: CommandInterpreting {
         }
 
         if let match = firstMatch(
+            #"(?:we have|i have|there are) (\d+) meals? (?:of )?(.+?) (?:left|remaining)(?:[.!]|$)"#,
+            in: source
+        ), match.count == 3, let meals = Int(match[1]) {
+            let itemName = cleaned(match[2])
+            intents.append(
+                DetectedIntent(kind: .updateInventory, confidence: 0.98)
+            )
+            entities.append(
+                ExtractedEntity(
+                    kind: .inventoryItem,
+                    value: itemName
+                )
+            )
+            entities.append(
+                ExtractedEntity(
+                    kind: .inventoryQuantity,
+                    value: match[1],
+                    normalizedValue: "\(meals)",
+                    integerValue: meals
+                )
+            )
+            mutations.append(
+                .updateInventory(
+                    InventoryUpdatePayload(
+                        name: itemName,
+                        state: meals == 0 ? .empty : meals <= 1 ? .low : .available,
+                        mealsRemaining: meals
+                    )
+                )
+            )
+        }
+
+        if let match = firstMatch(
+            #"(.+?) is (low|out|empty)(?:[.!]|$)"#,
+            in: source
+        ), match.count == 3 {
+            let itemName = cleaned(match[1])
+            let state: InventoryState =
+                match[2].lowercased() == "low" ? .low : .empty
+            intents.append(
+                DetectedIntent(kind: .updateInventory, confidence: 0.97)
+            )
+            entities.append(
+                ExtractedEntity(kind: .inventoryItem, value: itemName)
+            )
+            mutations.append(
+                .updateInventory(
+                    InventoryUpdatePayload(name: itemName, state: state)
+                )
+            )
+        }
+
+        if let match = firstMatch(
+            #"set (.+?) to (\d+(?:\.\d+)?) ([a-zA-Z]+)(?:[.!]|$)"#,
+            in: source
+        ), match.count == 4, let quantity = Double(match[2]) {
+            let itemName = cleaned(match[1])
+            intents.append(
+                DetectedIntent(kind: .updateInventory, confidence: 0.96)
+            )
+            entities.append(
+                ExtractedEntity(kind: .inventoryItem, value: itemName)
+            )
+            mutations.append(
+                .updateInventory(
+                    InventoryUpdatePayload(
+                        name: itemName,
+                        state: quantity == 0 ? .empty : .available,
+                        exactQuantity: quantity,
+                        quantityUnit: cleaned(match[3])
+                    )
+                )
+            )
+        }
+
+        if let match = firstMatch(
             #"(?:i(?:'m| am) )?(?:skipping|skip|not going to) (?:the )?(.+?)(?: today)?(?:[.!]|$)"#,
             in: source
         ), match.count == 2 {
@@ -288,7 +364,8 @@ public struct LocalCommandParser: CommandInterpreting {
             confirmationRequirement: confirmationReasons.isEmpty
                 ? .none
                 : .explicit(reasons: unique(confirmationReasons)),
-            createdAt: context.referenceDate
+            createdAt: context.referenceDate,
+            contextRevisionToken: context.revisionToken
         )
     }
 

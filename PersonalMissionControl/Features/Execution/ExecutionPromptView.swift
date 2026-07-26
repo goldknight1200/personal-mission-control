@@ -38,6 +38,7 @@ struct ExecutionPromptView: View {
                         scheduleBlockID,
                         missionTitle,
                         consequence,
+                        shortenedWorkout,
                         referenceDate
                     ):
                         skipConfirmationContent(
@@ -45,6 +46,7 @@ struct ExecutionPromptView: View {
                             scheduleBlockID: scheduleBlockID,
                             missionTitle: missionTitle,
                             consequence: consequence,
+                            shortenedWorkout: shortenedWorkout,
                             referenceDate: referenceDate
                         )
 
@@ -164,6 +166,7 @@ struct ExecutionPromptView: View {
         scheduleBlockID: EntityID,
         missionTitle: String,
         consequence: String,
+        shortenedWorkout: ShortenedWorkoutSuggestion?,
         referenceDate: Date
     ) -> some View {
         Label("Protected or consequential mission", systemImage: "shield.lefthalf.filled")
@@ -180,6 +183,26 @@ struct ExecutionPromptView: View {
         Text("The planner will not weaken the goal automatically. Confirm only if skipping is the deliberate choice.")
             .font(.footnote)
             .foregroundStyle(.secondary)
+
+        if let shortenedWorkout {
+            Button {
+                model.applyShortenedWorkoutSuggestion(
+                    scheduleBlockID: scheduleBlockID,
+                    suggestion: shortenedWorkout,
+                    at: referenceDate
+                )
+            } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Do shortened approved session")
+                        .font(.headline)
+                    Text(shortenedWorkout.explanation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.borderedProminent)
+        }
 
         Button(role: .destructive) {
             model.confirmSkip(

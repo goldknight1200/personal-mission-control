@@ -55,6 +55,47 @@ final class LocalCommandParserTests: XCTestCase {
         XCTAssertEqual(command.proposedMutations, [.markInventoryEmpty(name: "milk")])
     }
 
+    func testLowFrictionInventoryQuantitiesParseFromVoiceText() {
+        let meals = parse("We have 3 meals of chicken left.")
+        let low = parse("Milk is low.")
+        let exact = parse("Set rice to 2 kg.")
+
+        XCTAssertEqual(meals.detectedIntents.map(\.kind), [.updateInventory])
+        XCTAssertEqual(
+            meals.proposedMutations,
+            [
+                .updateInventory(
+                    InventoryUpdatePayload(
+                        name: "chicken",
+                        state: .available,
+                        mealsRemaining: 3
+                    )
+                )
+            ]
+        )
+        XCTAssertEqual(
+            low.proposedMutations,
+            [
+                .updateInventory(
+                    InventoryUpdatePayload(name: "Milk", state: .low)
+                )
+            ]
+        )
+        XCTAssertEqual(
+            exact.proposedMutations,
+            [
+                .updateInventory(
+                    InventoryUpdatePayload(
+                        name: "rice",
+                        state: .available,
+                        exactQuantity: 2,
+                        quantityUnit: "kg"
+                    )
+                )
+            ]
+        )
+    }
+
     func testMoveAndProtectedSkipRequireConsequentialConfirmation() {
         let move = parse("Move the gym.")
         let replan = parse("Replan the gym.")

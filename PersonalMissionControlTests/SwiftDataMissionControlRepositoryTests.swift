@@ -6,6 +6,36 @@ import XCTest
 
 final class SwiftDataMissionControlRepositoryTests: XCTestCase {
     @MainActor
+    func testDeleteSnapshotRemovesDurablePrimaryRecord() throws {
+        let repository = try SwiftDataMissionControlRepository(
+            isStoredInMemoryOnly: true
+        )
+        try repository.saveSnapshot(
+            MissionControlSeed.makeDemo(
+                referenceDate: Date(timeIntervalSince1970: 30_000)
+            )
+        )
+
+        try repository.deleteSnapshot()
+
+        XCTAssertNil(try repository.loadSnapshot())
+    }
+
+    @MainActor
+    func testInvalidSnapshotIsRejectedBeforePersistence() throws {
+        let repository = try SwiftDataMissionControlRepository(
+            isStoredInMemoryOnly: true
+        )
+        var snapshot = MissionControlSeed.makeDemo(
+            referenceDate: Date(timeIntervalSince1970: 35_000)
+        )
+        snapshot.goals.append(snapshot.goals[0])
+
+        XCTAssertThrowsError(try repository.saveSnapshot(snapshot))
+        XCTAssertNil(try repository.loadSnapshot())
+    }
+
+    @MainActor
     func testEmptyStoreReturnsNilThenRoundTripsSnapshot() throws {
         let repository = try SwiftDataMissionControlRepository(isStoredInMemoryOnly: true)
         let snapshot = MissionControlSeed.makeDemo(referenceDate: Date(timeIntervalSince1970: 20_000))
@@ -36,6 +66,54 @@ final class SwiftDataMissionControlRepositoryTests: XCTestCase {
     }
 
     @MainActor
+    func testWorkoutLogRoundTripsThroughSwiftDataSnapshot() throws {
+        let repository = try SwiftDataMissionControlRepository(
+            isStoredInMemoryOnly: true
+        )
+        let date = Date(timeIntervalSince1970: 50_000)
+        var snapshot = MissionControlSeed.makeDemo(referenceDate: date)
+        let program = try XCTUnwrap(snapshot.workoutPrograms.first)
+        let session = try XCTUnwrap(program.sessionTemplates.first)
+        let mission = try XCTUnwrap(
+            snapshot.missions.first(where: { $0.category == .gym })
+        )
+        let blockID = EntityID()
+        snapshot.workoutLogs.append(
+            WorkoutLog(
+                programID: program.id,
+                sessionTemplateID: session.id,
+                missionID: mission.id,
+                scheduleBlockID: blockID,
+                selectedExerciseIDs: session.exercises.map(\.id),
+                startedAt: date,
+                completedAt: date.addingTimeInterval(3_600),
+                status: .completed,
+                exerciseLogs: [
+                    WorkoutExerciseLog(
+                        exerciseID: session.exercises[0].id,
+                        setLogs: [
+                            WorkoutSetLog(
+                                prescriptionSetID:
+                                    session.exercises[0].sets[0].id,
+                                setNumber: 1,
+                                weight: 70,
+                                reps: 8,
+                                completedAt:
+                                    date.addingTimeInterval(300)
+                            )
+                        ]
+                    )
+                ]
+            )
+        )
+
+        try repository.saveSnapshot(snapshot)
+        let restored = try XCTUnwrap(repository.loadSnapshot())
+
+        XCTAssertEqual(restored.workoutLogs, snapshot.workoutLogs)
+    }
+
+    @MainActor
     func testPhaseOnePayloadMigratesToCurrentSnapshotSchema() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
@@ -54,6 +132,8 @@ final class SwiftDataMissionControlRepositoryTests: XCTestCase {
         )
         object["schemaVersion"] = 1
         object.removeValue(forKey: "inventoryItems")
+        object.removeValue(forKey: "mealTemplates")
+        object.removeValue(forKey: "plannedMeals")
         object.removeValue(forKey: "painFlags")
         object.removeValue(forKey: "missionStartRecords")
         object.removeValue(forKey: "replanRequests")
@@ -62,11 +142,20 @@ final class SwiftDataMissionControlRepositoryTests: XCTestCase {
         object.removeValue(forKey: "unresolvedDispositions")
         object.removeValue(forKey: "missDiagnostics")
         object.removeValue(forKey: "approvedWorkouts")
+        object.removeValue(forKey: "workoutPrograms")
+        object.removeValue(forKey: "workoutLogs")
         object.removeValue(forKey: "nutritionPlanningNeeds")
         object.removeValue(forKey: "recoveryContext")
         object.removeValue(forKey: "schedulingDecisions")
         object.removeValue(forKey: "schedulingConflicts")
         object.removeValue(forKey: "schedulingPlanMetadata")
+        object.removeValue(forKey: "manualScheduleAdjustments")
+        object.removeValue(forKey: "calendarIntegrationSettings")
+        object.removeValue(forKey: "healthIntegrationSettings")
+        object.removeValue(forKey: "externalCalendarItems")
+        object.removeValue(forKey: "iCalSubscriptions")
+        object.removeValue(forKey: "aiIntegrationSettings")
+        object.removeValue(forKey: "privacySettings")
         let legacyPayload = try JSONSerialization.data(withJSONObject: object)
         writer.insert(
             MissionControlStateRecord(
@@ -84,16 +173,27 @@ final class SwiftDataMissionControlRepositoryTests: XCTestCase {
             MissionControlSnapshot.currentSchemaVersion
         )
         XCTAssertTrue(loaded.inventoryItems.isEmpty)
+        XCTAssertTrue(loaded.mealTemplates.isEmpty)
+        XCTAssertTrue(loaded.plannedMeals.isEmpty)
         XCTAssertTrue(loaded.commandHistory.isEmpty)
         XCTAssertTrue(loaded.dailyCheckIns.isEmpty)
         XCTAssertTrue(loaded.unresolvedDispositions.isEmpty)
         XCTAssertTrue(loaded.missDiagnostics.isEmpty)
         XCTAssertTrue(loaded.approvedWorkouts.isEmpty)
+        XCTAssertTrue(loaded.workoutPrograms.isEmpty)
+        XCTAssertTrue(loaded.workoutLogs.isEmpty)
         XCTAssertTrue(loaded.nutritionPlanningNeeds.isEmpty)
         XCTAssertNil(loaded.recoveryContext)
         XCTAssertTrue(loaded.schedulingDecisions.isEmpty)
         XCTAssertTrue(loaded.schedulingConflicts.isEmpty)
         XCTAssertNil(loaded.schedulingPlanMetadata)
+        XCTAssertTrue(loaded.manualScheduleAdjustments.isEmpty)
+        XCTAssertEqual(loaded.calendarIntegrationSettings.mode, .disabled)
+        XCTAssertFalse(loaded.healthIntegrationSettings.sleepReadEnabled)
+        XCTAssertTrue(loaded.externalCalendarItems.isEmpty)
+        XCTAssertTrue(loaded.iCalSubscriptions.isEmpty)
+        XCTAssertFalse(loaded.aiIntegrationSettings.isEnabled)
+        XCTAssertTrue(loaded.privacySettings.retainsCommandTranscripts)
 
         let verifier = ModelContext(container)
         let records = try verifier.fetch(FetchDescriptor<MissionControlStateRecord>())

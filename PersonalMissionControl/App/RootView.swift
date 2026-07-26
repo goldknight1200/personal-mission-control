@@ -1,6 +1,8 @@
+import Combine
 import Foundation
 import MissionControlCore
 import SwiftUI
+import UIKit
 
 enum AppTab: String, CaseIterable, Identifiable {
     case home
@@ -78,6 +80,7 @@ enum MenuDestination: String, CaseIterable, Identifiable {
 
 @MainActor
 struct RootView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: AppModel
     @StateObject private var voiceCapture: VoiceCaptureViewModel
 
@@ -146,7 +149,10 @@ struct RootView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: isMenuOpen)
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.22),
+            value: isMenuOpen
+        )
         .sheet(
             isPresented: $voiceCapture.isReviewPresented,
             onDismiss: voiceCapture.dismissReview
@@ -182,6 +188,33 @@ struct RootView: View {
         }
         .task {
             await model.prepareActiveExecution()
+            await model.preparePlatformIntegrations()
+            if MissionControlIntentBridge.shared.consumeCaptureRequest() {
+                voiceCapture.presentTextEntry()
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .missionControlCaptureRequested
+            )
+        ) { _ in
+            if MissionControlIntentBridge.shared.consumeCaptureRequest() {
+                voiceCapture.presentTextEntry()
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSSystemTimeZoneDidChange
+            )
+        ) { _ in
+            model.handleSignificantTimeChange()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIApplication.significantTimeChangeNotification
+            )
+        ) { _ in
+            model.handleSignificantTimeChange()
         }
     }
 
@@ -216,12 +249,24 @@ struct RootView: View {
                 switch destination {
                 case .profile:
                     ProfileSettingsView(profile: model.snapshot.profile, onSave: model.updateProfile)
+                case .nutrition:
+                    NutritionView(model: model)
+                case .training:
+                    TrainingProgramView(model: model)
                 case .appearance:
                     AppearanceSettingsView(profile: model.snapshot.profile, onSave: model.updateProfile)
                 case .history:
                     HistoryConsistencyView(model: model)
                 case .notifications:
                     NotificationSettingsView(model: model)
+                case .calendar:
+                    CalendarIntegrationView(model: model)
+                case .health:
+                    HealthIntegrationView(model: model)
+                case .aiBehavior:
+                    AIBehaviorSettingsView(model: model)
+                case .appSettings:
+                    PrivacyAndDataSettingsView(model: model)
                 default:
                     MenuPlaceholderView(destination: destination)
                 }

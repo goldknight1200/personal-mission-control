@@ -16,7 +16,12 @@ public struct PlanningInput: Equatable, Sendable {
     public var projects: [Project]
     public var missions: [Mission]
     public var routines: [Routine]
+    public var shoppingItems: [ChecklistItem]
+    public var mealTemplates: [MealTemplate]
+    public var plannedMeals: [PlannedMeal]
     public var approvedWorkouts: [ApprovedWorkout]
+    public var workoutPrograms: [WorkoutProgram]
+    public var workoutLogs: [WorkoutLog]
     public var nutritionNeeds: [NutritionPlanningNeed]
     public var completionHistory: [CompletionRecord]
     public var recoveryContext: RecoveryContext?
@@ -36,7 +41,12 @@ public struct PlanningInput: Equatable, Sendable {
         projects: [Project],
         missions: [Mission],
         routines: [Routine],
+        shoppingItems: [ChecklistItem] = [],
+        mealTemplates: [MealTemplate] = [],
+        plannedMeals: [PlannedMeal] = [],
         approvedWorkouts: [ApprovedWorkout] = [],
+        workoutPrograms: [WorkoutProgram] = [],
+        workoutLogs: [WorkoutLog] = [],
         nutritionNeeds: [NutritionPlanningNeed] = [],
         completionHistory: [CompletionRecord] = [],
         recoveryContext: RecoveryContext? = nil,
@@ -55,7 +65,12 @@ public struct PlanningInput: Equatable, Sendable {
         self.projects = projects
         self.missions = missions
         self.routines = routines
+        self.shoppingItems = shoppingItems
+        self.mealTemplates = mealTemplates
+        self.plannedMeals = plannedMeals
         self.approvedWorkouts = approvedWorkouts
+        self.workoutPrograms = workoutPrograms
+        self.workoutLogs = workoutLogs
         self.nutritionNeeds = nutritionNeeds
         self.completionHistory = completionHistory
         self.recoveryContext = recoveryContext
@@ -134,22 +149,36 @@ public struct PlanningInput: Equatable, Sendable {
                 }
             }
         }
+        let pendingShoppingItems = snapshot.checklist(ofKind: .shopping)?
+            .items.filter { !$0.isCompleted } ?? []
+        let manualBlocks = snapshot.manualScheduleAdjustments.map(\.block)
         self.init(
             currentTime: currentTime,
             profile: snapshot.profile,
             fixedCommitments: snapshot.fixedCommitments,
             goals: snapshot.goals,
             projects: snapshot.projects,
-            missions: snapshot.missions.filter { $0.sourceRoutineID == nil },
+            missions: snapshot.missions.filter {
+                $0.sourceRoutineID == nil
+                    && $0.plannedMealID == nil
+                    && $0.nutritionPlanningNeedID == nil
+            },
             routines: snapshot.routines,
+            shoppingItems: pendingShoppingItems,
+            mealTemplates: snapshot.mealTemplates,
+            plannedMeals: snapshot.plannedMeals,
             approvedWorkouts: snapshot.approvedWorkouts,
+            workoutPrograms: snapshot.workoutPrograms,
+            workoutLogs: snapshot.workoutLogs,
             nutritionNeeds: snapshot.nutritionPlanningNeeds,
             completionHistory: snapshot.completions,
             recoveryContext: snapshot.recoveryContext,
             painFlags: snapshot.painFlags,
             missDiagnostics: snapshot.missDiagnostics,
             existingPlan: snapshot.scheduleBlocks,
-            lockedBlocks: lockedBlocks,
+            lockedBlocks: lockedBlocks + manualBlocks.filter { manual in
+                !lockedBlocks.contains(where: { $0.id == manual.id })
+            },
             deferredMissionIDs: deferredMissionIDs,
             deferredOccurrenceCounts: deferredOccurrenceCounts,
             dueWindowOverrides: dueWindowOverrides
@@ -185,13 +214,21 @@ public struct SchedulingResult: Equatable, Sendable {
 public extension MissionControlSnapshot {
     mutating func applySchedulingResult(_ result: SchedulingResult) {
         let historicalGenerated = missions.filter { mission in
-            mission.sourceRoutineID != nil
+            (
+                mission.sourceRoutineID != nil
+                    || mission.plannedMealID != nil
+                    || mission.nutritionPlanningNeedID != nil
+            )
                 && completions.contains(where: { $0.missionID == mission.id })
                 && !result.generatedMissions.contains(where: {
                     $0.id == mission.id
                 })
         }
-        missions.removeAll(where: { $0.sourceRoutineID != nil })
+        missions.removeAll(where: {
+            $0.sourceRoutineID != nil
+                || $0.plannedMealID != nil
+                || $0.nutritionPlanningNeedID != nil
+        })
         missions.append(contentsOf: historicalGenerated)
         for generated in result.generatedMissions
         where !missions.contains(where: { $0.id == generated.id }) {

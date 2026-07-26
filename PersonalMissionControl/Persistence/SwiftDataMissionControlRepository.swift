@@ -21,6 +21,7 @@ final class MissionControlStateRecord {
 
 enum MissionControlPersistenceError: Error, Equatable {
     case unsupportedSchema(found: Int, supported: Int)
+    case invalidSnapshot
 }
 
 @MainActor
@@ -64,6 +65,9 @@ final class SwiftDataMissionControlRepository: MissionControlRepository {
             )
         }
         var snapshot = try decoder.decode(MissionControlSnapshot.self, from: record.payload)
+        guard SnapshotIntegrityValidator.issues(in: snapshot).isEmpty else {
+            throw MissionControlPersistenceError.invalidSnapshot
+        }
         if record.schemaVersion < MissionControlSnapshot.currentSchemaVersion {
             snapshot.schemaVersion = MissionControlSnapshot.currentSchemaVersion
             record.schemaVersion = MissionControlSnapshot.currentSchemaVersion
@@ -74,6 +78,10 @@ final class SwiftDataMissionControlRepository: MissionControlRepository {
     }
 
     func saveSnapshot(_ snapshot: MissionControlSnapshot) throws {
+        let issues = SnapshotIntegrityValidator.issues(in: snapshot)
+        guard issues.isEmpty else {
+            throw MissionControlPersistenceError.invalidSnapshot
+        }
         let payload = try encoder.encode(snapshot)
         var descriptor = FetchDescriptor<MissionControlStateRecord>(
             predicate: #Predicate { $0.key == "primary" }
@@ -92,6 +100,17 @@ final class SwiftDataMissionControlRepository: MissionControlRepository {
             )
         }
         try saveContextOrRollback()
+    }
+
+    func deleteSnapshot() throws {
+        var descriptor = FetchDescriptor<MissionControlStateRecord>(
+            predicate: #Predicate { $0.key == "primary" }
+        )
+        descriptor.fetchLimit = 1
+        if let record = try context.fetch(descriptor).first {
+            context.delete(record)
+            try saveContextOrRollback()
+        }
     }
 
     private func saveContextOrRollback() throws {

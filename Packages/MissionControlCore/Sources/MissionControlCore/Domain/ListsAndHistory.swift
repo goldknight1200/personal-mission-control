@@ -7,6 +7,9 @@ public struct ChecklistItem: Codable, Equatable, Identifiable, Sendable {
     public var dueDate: Date?
     public var missionID: EntityID?
     public var quantity: String?
+    public var inventoryItemID: EntityID?
+    public var completedAt: Date?
+    public var suggestionReason: String?
 
     public init(
         id: EntityID = EntityID(),
@@ -14,7 +17,10 @@ public struct ChecklistItem: Codable, Equatable, Identifiable, Sendable {
         isCompleted: Bool = false,
         dueDate: Date? = nil,
         missionID: EntityID? = nil,
-        quantity: String? = nil
+        quantity: String? = nil,
+        inventoryItemID: EntityID? = nil,
+        completedAt: Date? = nil,
+        suggestionReason: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -22,6 +28,9 @@ public struct ChecklistItem: Codable, Equatable, Identifiable, Sendable {
         self.dueDate = dueDate
         self.missionID = missionID
         self.quantity = quantity
+        self.inventoryItemID = inventoryItemID
+        self.completedAt = completedAt
+        self.suggestionReason = suggestionReason
     }
 }
 

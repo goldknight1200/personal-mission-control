@@ -29,6 +29,10 @@
 		D10000000000000000000003 /* HistoryConsistencyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* HistoryConsistencyView.swift */; };
 		D10000000000000000000004 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* NotificationSettingsView.swift */; };
 		D10000000000000000000005 /* ExecutionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000005 /* ExecutionFlowTests.swift */; };
+		E10000000000000000000001 /* WorkoutViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* WorkoutViews.swift */; };
+		F10000000000000000000001 /* ApplePlatformAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* ApplePlatformAdapters.swift */; };
+		F10000000000000000000002 /* MissionControlAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* MissionControlAppIntents.swift */; };
+		F10000000000000000000003 /* IntegrationSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000003 /* IntegrationSettingsViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +68,10 @@
 		D20000000000000000000003 /* HistoryConsistencyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryConsistencyView.swift; sourceTree = "<group>"; };
 		D20000000000000000000004 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		D20000000000000000000005 /* ExecutionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionFlowTests.swift; sourceTree = "<group>"; };
+		E20000000000000000000001 /* WorkoutViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutViews.swift; sourceTree = "<group>"; };
+		F20000000000000000000001 /* ApplePlatformAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePlatformAdapters.swift; sourceTree = "<group>"; };
+		F20000000000000000000002 /* MissionControlAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionControlAppIntents.swift; sourceTree = "<group>"; };
+		F20000000000000000000003 /* IntegrationSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationSettingsViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -104,6 +112,7 @@
 				A4000000000000000000000C /* UI */,
 				C40000000000000000000002 /* Voice */,
 				D40000000000000000000001 /* Notifications */,
+				F40000000000000000000001 /* Platform */,
 			);
 			path = PersonalMissionControl;
 			sourceTree = "<group>";
@@ -147,6 +156,8 @@
 				D40000000000000000000002 /* Execution */,
 				D40000000000000000000003 /* History */,
 				D40000000000000000000004 /* Notifications */,
+				E40000000000000000000001 /* Workout */,
+				F40000000000000000000002 /* Integrations */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -157,6 +168,14 @@
 				A20000000000000000000006 /* HomeView.swift */,
 			);
 			path = Home;
+			sourceTree = "<group>";
+		};
+		E40000000000000000000001 /* Workout */ = {
+			isa = PBXGroup;
+			children = (
+				E20000000000000000000001 /* WorkoutViews.swift */,
+			);
+			path = Workout;
 			sourceTree = "<group>";
 		};
 		A40000000000000000000008 /* Goals */ = {
@@ -258,6 +277,23 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
+		F40000000000000000000001 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				F20000000000000000000001 /* ApplePlatformAdapters.swift */,
+				F20000000000000000000002 /* MissionControlAppIntents.swift */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
+		F40000000000000000000002 /* Integrations */ = {
+			isa = PBXGroup;
+			children = (
+				F20000000000000000000003 /* IntegrationSettingsViews.swift */,
+			);
+			path = Integrations;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -314,6 +350,11 @@
 				TargetAttributes = {
 					A50000000000000000000001 = {
 						CreatedOnToolsVersion = 16.0;
+						SystemCapabilities = {
+							com.apple.HealthKit = {
+								enabled = 1;
+							};
+						};
 					};
 					A50000000000000000000002 = {
 						CreatedOnToolsVersion = 16.0;
@@ -382,6 +423,10 @@
 				D10000000000000000000002 /* ExecutionPromptView.swift in Sources */,
 				D10000000000000000000003 /* HistoryConsistencyView.swift in Sources */,
 				D10000000000000000000004 /* NotificationSettingsView.swift in Sources */,
+				E10000000000000000000001 /* WorkoutViews.swift in Sources */,
+				F10000000000000000000001 /* ApplePlatformAdapters.swift in Sources */,
+				F10000000000000000000002 /* MissionControlAppIntents.swift in Sources */,
+				F10000000000000000000003 /* IntegrationSettingsViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -446,11 +491,15 @@
 		A70000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PersonalMissionControl/PersonalMissionControl.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hold the microphone button to record a voice command for local review.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Import calendar events into the local plan and update events created by Mission Control.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Create and update calendar events that Mission Control owns.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Read recent sleep duration as optional morning planning context.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribe voice commands so you can review and confirm schedule changes.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -470,11 +519,15 @@
 		A70000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PersonalMissionControl/PersonalMissionControl.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hold the microphone button to record a voice command for local review.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Import calendar events into the local plan and update events created by Mission Control.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Create and update calendar events that Mission Control owns.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Read recent sleep duration as optional morning planning context.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribe voice commands so you can review and confirm schedule changes.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

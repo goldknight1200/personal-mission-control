@@ -8,6 +8,7 @@ struct VoiceCommandFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var transcriptIsFocused: Bool
     @State private var isEditing = false
+    @State private var isInterpreting = false
 
     var body: some View {
         NavigationStack {
@@ -99,6 +100,24 @@ struct VoiceCommandFlowView: View {
                     )
             }
 
+            if let payload = model.aiRequestInspection(
+                confirmedTranscript: capture.confirmedTranscript
+            ) {
+                DisclosureGroup("Inspect AI request before sending") {
+                    ScrollView(.horizontal) {
+                        Text(payload)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                    }
+                    Text(
+                        "Send calls the configured HTTPS provider. The resulting proposal still requires confirmation and local validation."
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+                .missionControlCard()
+            }
+
             if let error = capture.reviewError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.subheadline)
@@ -122,9 +141,18 @@ struct VoiceCommandFlowView: View {
 
                 Spacer()
 
-                Button("Send", action: sendTranscript)
+                Button(action: sendTranscript) {
+                    if isInterpreting {
+                        ProgressView()
+                            .accessibilityLabel("Interpreting command")
+                    } else {
+                        Text("Send")
+                    }
+                }
                     .buttonStyle(.borderedProminent)
                     .disabled(
+                        isInterpreting
+                            ||
                         capture.confirmedTranscript
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                             .isEmpty
@@ -167,6 +195,19 @@ struct VoiceCommandFlowView: View {
     @ViewBuilder
     private func commandSummary(_ command: StructuredCommand) -> some View {
         section(title: "Detected") {
+            if command.interpretationSource == .aiProvider {
+                Label(
+                    "Configured AI provider proposal",
+                    systemImage: "sparkles"
+                )
+                Divider()
+            } else if command.interpretationSource == .aiFallback {
+                Label(
+                    "Deterministic local fallback",
+                    systemImage: "iphone"
+                )
+                Divider()
+            }
             HStack {
                 Text("Overall confidence")
                 Spacer()
@@ -259,12 +300,15 @@ struct VoiceCommandFlowView: View {
     private func sendTranscript() {
         transcriptIsFocused = false
         isEditing = false
-        handle(
-            model.submitVoiceCommand(
+        isInterpreting = true
+        Task {
+            let submission = await model.submitReviewedCommand(
                 rawTranscript: capture.rawTranscript,
                 confirmedTranscript: capture.confirmedTranscript
             )
-        )
+            isInterpreting = false
+            handle(submission)
+        }
     }
 
     private func confirmCommand() {

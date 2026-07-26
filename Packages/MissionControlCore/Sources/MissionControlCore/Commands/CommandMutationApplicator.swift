@@ -115,6 +115,24 @@ public struct CommandMutationApplicator {
                         )
                     )
                 }
+                if kind == .shopping {
+                    requests.append(
+                        ReplanRequest(
+                            reason: .shoppingListChanged,
+                            requestedAt: command.createdAt,
+                            affectedStart: command.createdAt,
+                            affectedEnd:
+                                working.schedulingPlanMetadata?.horizonEnd
+                                ?? command.createdAt.addingTimeInterval(
+                                    TimeInterval(
+                                        working.profile.planningPolicy
+                                            .planningHorizonDays
+                                            * 24 * 60 * 60
+                                    )
+                                )
+                        )
+                    )
+                }
 
             case let .markInventoryEmpty(name):
                 if let inventoryIndex = working.inventoryItems.firstIndex(where: {
@@ -122,6 +140,14 @@ public struct CommandMutationApplicator {
                 }) {
                     working.inventoryItems[inventoryIndex].state = .empty
                     working.inventoryItems[inventoryIndex].quantityNote = nil
+                    if working.inventoryItems[inventoryIndex]
+                        .exactQuantity != nil {
+                        working.inventoryItems[inventoryIndex].exactQuantity = 0
+                    }
+                    if working.inventoryItems[inventoryIndex]
+                        .mealsRemaining != nil {
+                        working.inventoryItems[inventoryIndex].mealsRemaining = 0
+                    }
                     working.inventoryItems[inventoryIndex].updatedAt = command.createdAt
                 } else {
                     working.inventoryItems.append(
@@ -132,6 +158,75 @@ public struct CommandMutationApplicator {
                         )
                     )
                 }
+                requests.append(
+                    inventoryReplanRequest(
+                        snapshot: working,
+                        command: command
+                    )
+                )
+
+            case let .updateInventory(update):
+                if let inventoryIndex = working.inventoryItems.firstIndex(
+                    where: {
+                        normalized($0.name) == normalized(update.name)
+                    }
+                ) {
+                    if let state = update.state {
+                        working.inventoryItems[inventoryIndex].state = state
+                        if state == .empty {
+                            if working.inventoryItems[inventoryIndex]
+                                .exactQuantity != nil {
+                                working.inventoryItems[inventoryIndex]
+                                    .exactQuantity = 0
+                            }
+                            if working.inventoryItems[inventoryIndex]
+                                .mealsRemaining != nil {
+                                working.inventoryItems[inventoryIndex]
+                                    .mealsRemaining = 0
+                            }
+                        }
+                    }
+                    if update.exactQuantity != nil {
+                        working.inventoryItems[inventoryIndex].exactQuantity =
+                            update.exactQuantity
+                        working.inventoryItems[inventoryIndex].quantityUnit =
+                            update.quantityUnit
+                        working.inventoryItems[inventoryIndex].mealsRemaining =
+                            nil
+                    }
+                    if update.mealsRemaining != nil {
+                        working.inventoryItems[inventoryIndex].mealsRemaining =
+                            update.mealsRemaining
+                        working.inventoryItems[inventoryIndex].exactQuantity =
+                            nil
+                        working.inventoryItems[inventoryIndex].quantityUnit =
+                            nil
+                    }
+                    if let quantityNote = update.quantityNote {
+                        working.inventoryItems[inventoryIndex].quantityNote =
+                            quantityNote
+                    }
+                    working.inventoryItems[inventoryIndex].updatedAt =
+                        command.createdAt
+                } else {
+                    working.inventoryItems.append(
+                        InventoryItem(
+                            name: update.name,
+                            state: update.state ?? .available,
+                            quantityNote: update.quantityNote,
+                            exactQuantity: update.exactQuantity,
+                            quantityUnit: update.quantityUnit,
+                            mealsRemaining: update.mealsRemaining,
+                            updatedAt: command.createdAt
+                        )
+                    )
+                }
+                requests.append(
+                    inventoryReplanRequest(
+                        snapshot: working,
+                        command: command
+                    )
+                )
 
             case let .requestMissionMove(missionID, missionName):
                 let resolvedID = try requireMissionID(
@@ -199,7 +294,11 @@ public struct CommandMutationApplicator {
                     title: shift.title,
                     category: .work,
                     start: shift.start,
-                    end: shift.end
+                    end: shift.end,
+                    location: shift.location,
+                    contextTags: shift.title.lowercased().contains("supermarket")
+                        ? ["supermarket"]
+                        : []
                 )
                 working.fixedCommitments.append(commitment)
                 working.scheduleBlocks.append(
@@ -242,6 +341,28 @@ public struct CommandMutationApplicator {
             }
         }
 
+        let nutritionResult = NutritionPlanningCoordinator.reconcile(
+            snapshot: &working,
+            referenceDate: command.createdAt
+        )
+        if !nutritionResult.addedShoppingItemIDs.isEmpty,
+           !requests.contains(where: { $0.reason == .shoppingListChanged }) {
+            requests.append(
+                ReplanRequest(
+                    reason: .shoppingListChanged,
+                    requestedAt: command.createdAt,
+                    affectedStart: command.createdAt,
+                    affectedEnd:
+                        working.schedulingPlanMetadata?.horizonEnd
+                        ?? command.createdAt.addingTimeInterval(
+                            TimeInterval(
+                                working.profile.planningPolicy
+                                    .planningHorizonDays * 86_400
+                            )
+                        )
+                )
+            )
+        }
         working.replanRequests.append(contentsOf: requests)
         if !working.commandHistory.contains(where: { $0.id == command.id }) {
             working.commandHistory.append(command)
@@ -269,6 +390,25 @@ public struct CommandMutationApplicator {
 
     private func normalized(_ value: String) -> String {
         value.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func inventoryReplanRequest(
+        snapshot: MissionControlSnapshot,
+        command: StructuredCommand
+    ) -> ReplanRequest {
+        ReplanRequest(
+            reason: .inventoryChanged,
+            requestedAt: command.createdAt,
+            affectedStart: command.createdAt,
+            affectedEnd:
+                snapshot.schedulingPlanMetadata?.horizonEnd
+                ?? command.createdAt.addingTimeInterval(
+                    TimeInterval(
+                        snapshot.profile.planningPolicy.planningHorizonDays
+                            * 86_400
+                    )
+                )
+        )
     }
 
     private func executionBlockID(
