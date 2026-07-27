@@ -503,11 +503,17 @@ private final class Planner {
                 let preferredMinute = mealTimes.isEmpty
                     ? 13 * 60
                     : mealTimes[min(mealIndex, mealTimes.count - 1)]
-                let namespace =
-                    "nutrition.coverage.\(need.id.rawValue.uuidString).\(index)"
-                guard let start = findSimpleSlot(
-                    day: day,
-                    durationMinutes: need.suggestedMealDurationMinutes,
+            let namespace =
+                "nutrition.coverage.\(need.id.rawValue.uuidString).\(index)"
+            let missionID = identifiers.identifier(namespace: namespace)
+            guard !input.completionHistory.contains(where: {
+                $0.missionID == missionID
+            }) else {
+                continue
+            }
+            guard let start = findSimpleSlot(
+                day: day,
+                durationMinutes: need.suggestedMealDurationMinutes,
                     preferredMinute: preferredMinute,
                     earliestOverride: nil
                 ) else {
@@ -520,11 +526,11 @@ private final class Planner {
                         end: awakeEnd(for: day)
                     )
                     continue
-                }
-                let mission = nutritionMission(
-                    id: identifiers.identifier(namespace: namespace),
-                    title: "Substantial meal",
-                    durationMinutes: need.suggestedMealDurationMinutes,
+            }
+            let mission = nutritionMission(
+                id: missionID,
+                title: "Substantial meal",
+                durationMinutes: need.suggestedMealDurationMinutes,
                     nutritionPlanningNeedID:
                         activeNutritionNeedID(for: need)
                 )
@@ -586,7 +592,6 @@ private final class Planner {
             )
             guard !input.completionHistory.contains(where: {
                 $0.missionID == missionID
-                    && ($0.status == .completed || $0.status == .partial)
             }) else {
                 continue
             }
@@ -667,7 +672,6 @@ private final class Planner {
         )
         guard !input.completionHistory.contains(where: {
             $0.missionID == missionID
-                && ($0.status == .completed || $0.status == .partial)
         }) else {
             return
         }
@@ -2489,13 +2493,16 @@ private final class Planner {
                     })
             }
             .sorted(by: blockOrder)
+        let resolvedOccurrenceCount = input.completionHistory.filter {
+            $0.missionID == mission.id
+        }.count
         let availableDays = dayStarts.filter {
             awakeEnd(for: $0) > input.currentTime
         }
         return (0..<count).map { index in
             var result = base
             result.occurrenceKey =
-                "project.\(mission.id.rawValue.uuidString).\(index)"
+                "project.\(mission.id.rawValue.uuidString).\(resolvedOccurrenceCount + index)"
             if !availableDays.isEmpty {
                 let preferredIndex = index % availableDays.count
                 result.preferredDayStarts =

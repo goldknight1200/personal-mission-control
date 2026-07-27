@@ -235,13 +235,19 @@ public struct SchedulingResult: Equatable, Sendable {
 
 public extension MissionControlSnapshot {
     mutating func applySchedulingResult(_ result: SchedulingResult) {
+        let retainedMissionIDs = Set(result.blocks.compactMap(\.missionID))
         let historicalGenerated = missions.filter { mission in
             (
                 mission.sourceRoutineID != nil
                     || mission.plannedMealID != nil
                     || mission.nutritionPlanningNeedID != nil
             )
-                && completions.contains(where: { $0.missionID == mission.id })
+                && (
+                    retainedMissionIDs.contains(mission.id)
+                        || completions.contains(where: {
+                            $0.missionID == mission.id
+                        })
+                )
                 && !result.generatedMissions.contains(where: {
                     $0.id == mission.id
                 })
