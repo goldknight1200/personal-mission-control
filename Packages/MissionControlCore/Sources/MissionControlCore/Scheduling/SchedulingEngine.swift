@@ -2483,35 +2483,76 @@ private final class Planner {
             Int(ceil(Double(remaining) / Double(blockMinutes))),
             max(dayStarts.count * 2, 1)
         )
+        let resolvedBlockIDs = Set(
+            input.completionHistory.compactMap(\.scheduleBlockID)
+        )
         let existing = input.existingPlan
             .filter { existingBlock in
                 existingBlock.missionID == mission.id
                     && existingBlock.kind == .mission
                     && existingBlock.end > input.currentTime
+                    && !resolvedBlockIDs.contains(existingBlock.id)
                     && !blocks.contains(where: {
                         $0.id == existingBlock.id
                     })
             }
             .sorted(by: blockOrder)
-        let resolvedOccurrenceCount = input.completionHistory.filter {
-            $0.missionID == mission.id
-        }.count
         let availableDays = dayStarts.filter {
             awakeEnd(for: $0) > input.currentTime
         }
+        let missionNamespace = mission.id.rawValue.uuidString
+        let reservedBlockIDs = Set(
+            input.existingPlan.map(\.id)
+                + blocks.map(\.id)
+                + Array(resolvedBlockIDs)
+        )
+        let sequenceSearchLimit = max(
+            reservedBlockIDs.count + count + 64,
+            64
+        )
+        var usedSequences: Set<Int> = []
+        var nextSequence = 0
+        func blockID(for sequence: Int) -> EntityID {
+            identifiers.identifier(
+                namespace:
+                    "project.\(missionNamespace).\(sequence).mission"
+            )
+        }
+        func sequence(for existingBlock: ScheduleBlock) -> Int? {
+            (0..<sequenceSearchLimit).first(where: {
+                blockID(for: $0) == existingBlock.id
+            })
+        }
+        func nextUnusedSequence() -> Int {
+            while usedSequences.contains(nextSequence)
+                || reservedBlockIDs.contains(
+                    blockID(for: nextSequence)
+                ) {
+                nextSequence += 1
+            }
+            let selected = nextSequence
+            nextSequence += 1
+            return selected
+        }
+
         return (0..<count).map { index in
             var result = base
+            let existingBlock = index < existing.count
+                ? existing[index]
+                : nil
+            let sequence = existingBlock
+                .flatMap { sequence(for: $0) }
+                ?? nextUnusedSequence()
+            usedSequences.insert(sequence)
             result.occurrenceKey =
-                "project.\(mission.id.rawValue.uuidString).\(resolvedOccurrenceCount + index)"
+                "project.\(missionNamespace).\(sequence)"
             if !availableDays.isEmpty {
                 let preferredIndex = index % availableDays.count
                 result.preferredDayStarts =
                     Array(availableDays[preferredIndex...])
                     + Array(availableDays[..<preferredIndex])
             }
-            result.existingBlock = index < existing.count
-                ? existing[index]
-                : nil
+            result.existingBlock = existingBlock
             if index == count - 1, remaining % blockMinutes != 0 {
                 result.mission.estimatedDurationMinutes = max(
                     remaining % blockMinutes,
