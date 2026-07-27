@@ -234,8 +234,8 @@ Still required before any production-readiness statement:
 
 | Category | Status |
 | --- | --- |
-| Implemented and unit-tested | Implemented in source; tests authored but not executed on this Windows host |
-| Compiled/tested in Xcode or simulator | Not validated |
+| Implemented and unit-tested | Revision `68e00784c7cee37ff5509da1fcc02647701560e6` passed all 151 core tests and all 22 application tests in the macOS/Xcode workflow; no authored skip/disabled marker was found |
+| Compiled/tested in Xcode or simulator | Static validation, the complete simulator test action, and the unsigned Debug build passed; the launch-smoke, unsigned Release, artifact, and final workflow conclusions still require an authenticated run read |
 | Validated on a real device | Not validated |
 | Requires user account/permission configuration | AI endpoint/model/credential; Calendar, Health, Speech, Notifications, Siri, photo/file selections as used |
 | Known limitations | English-only UI; custom JSON endpoint rather than a bundled provider-specific account flow; no background OCR/feed refresh; no automatic cloud sync; external exported calendar items are not deleted by local reset; real-device performance thresholds remain unset |

@@ -10,6 +10,7 @@ on:
       - "PersonalMissionControl/**"
       - "PersonalMissionControlTests/**"
       - "PersonalMissionControl.xcodeproj/**"
+      - "docs/**"
       - "**/*.swift"
       - "**/Package.swift"
       - "**/Package.resolved"
@@ -26,6 +27,7 @@ on:
       - "PersonalMissionControl/**"
       - "PersonalMissionControlTests/**"
       - "PersonalMissionControl.xcodeproj/**"
+      - "docs/**"
       - "**/*.swift"
       - "**/Package.swift"
       - "**/Package.resolved"
@@ -71,7 +73,28 @@ jobs:
           uname -m | tee Logs/runner-architecture.txt
           xcodebuild -version | tee Logs/xcode-version.txt
           swift --version | tee Logs/swift-version.txt
-          xcrun simctl list devices available | tee Logs/simctl-devices.txt
+          python3 <<'PY'
+          import subprocess
+
+          command = ["xcrun", "simctl", "list", "devices", "available"]
+          try:
+              result = subprocess.run(
+                  command,
+                  check=True,
+                  capture_output=True,
+                  text=True,
+                  timeout=180,
+              )
+          except subprocess.TimeoutExpired:
+              print(
+                  "::error title=simctl inventory timed out::"
+                  "Available-device inventory exceeded 180 seconds."
+              )
+              raise SystemExit(124)
+          with open("Logs/simctl-devices.txt", "w", encoding="utf-8") as handle:
+              handle.write(result.stdout)
+          print(result.stdout, end="")
+          PY
 
       - name: Gate 6 — Static repository validation
         id: static_validation
@@ -181,7 +204,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          xcrun simctl list devices available --json > Logs/simctl-devices.json
+          python3 <<'PY'
+          import subprocess
+
+          command = [
+              "xcrun",
+              "simctl",
+              "list",
+              "devices",
+              "available",
+              "--json",
+          ]
+          try:
+              result = subprocess.run(
+                  command,
+                  check=True,
+                  capture_output=True,
+                  text=True,
+                  timeout=180,
+              )
+          except subprocess.TimeoutExpired:
+              print(
+                  "::error title=simctl inventory timed out::"
+                  "JSON available-device inventory exceeded 180 seconds."
+              )
+              raise SystemExit(124)
+          with open(
+              "Logs/simctl-devices.json",
+              "w",
+              encoding="utf-8",
+          ) as handle:
+              handle.write(result.stdout)
+          PY
 
           python3 <<'PY'
           import json

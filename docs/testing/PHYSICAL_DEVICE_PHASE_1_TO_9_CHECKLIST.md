@@ -4,6 +4,24 @@ Use this checklist only after the core tests, iOS simulator tests, Debug build,
 and Release build pass on the exact candidate commit. This is a Phase 1–9
 verification artifact; it does not authorize Phase 10.
 
+## Automated prerequisite handoff
+
+This handoff records automated evidence only. It does not mark any physical
+checkbox below as passed.
+
+| Field | Value |
+| --- | --- |
+| Implementation revision | `68e00784c7cee37ff5509da1fcc02647701560e6` |
+| Workflow run | `30227671433` |
+| Confirmed green before authenticated access stopped | Static validation; 151/151 core tests; 22/22 application tests; unsigned Debug build |
+| Authored skip-marker audit | 0 skip/disabled markers across 173 authored tests |
+| Still requiring an authenticated run conclusion | Three-profile launch smoke; unsigned Release build; artifacts; overall workflow conclusion |
+| Physical evidence | None recorded; every physical checklist item remains open |
+
+Do not begin the physical run until all entry gates pass on the exact final
+candidate commit. If the final candidate differs from the implementation
+revision above, replace this handoff with evidence for that candidate.
+
 ## Test record
 
 | Field | Value |

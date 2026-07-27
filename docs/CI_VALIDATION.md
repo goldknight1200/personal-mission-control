@@ -10,14 +10,17 @@ Phase 10 is outside this workflow's current scope.
 The workflow runs for:
 
 - pushes to `main` and branches matching `stabilize/**` when application,
-  package, project, or workflow inputs change;
-- pull requests targeting `main` when those inputs change; and
+  package, project, workflow, or validation-document inputs change;
+- pull requests targeting `main` when those inputs change;
 - manual `workflow_dispatch` runs.
 
 Validation uses GitHub's `macos-15` runner and pins
 `DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer`. The first step
 fails clearly if that Xcode installation is unavailable. The run records the
 macOS, architecture, Xcode, Swift, and available-simulator diagnostics as logs.
+The concurrency key includes the checked-out SHA, so a documentation or
+workflow revision receives evidence for that exact revision instead of
+silently reusing a previous run.
 
 ## Validation gates
 
@@ -32,7 +35,9 @@ The job runs these gates against one checked-out commit:
    - discovers all available iPhone simulators from `simctl` JSON;
    - selects a deterministic UDID on the newest supported iOS runtime; and
    - runs the `PersonalMissionControl` shared scheme's complete test action with
-     signing disabled.
+     signing disabled; and
+   - publishes a structured `xcresulttool` test summary so executed, passed,
+     failed, and skipped counts are visible independently of the raw build log.
 3. **Unsigned Debug build**
    - builds the complete application for the generic iOS Simulator destination
      in Debug configuration with `CODE_SIGNING_ALLOWED=NO`.
@@ -40,12 +45,16 @@ The job runs these gates against one checked-out commit:
    - builds the complete application for the generic iOS Simulator destination
      in Release configuration with `CODE_SIGNING_ALLOWED=NO`.
 5. **Representative launch smoke**
+   - starts only after the complete simulator test action and unsigned Debug
+     build have succeeded;
    - installs the Debug application on three distinct small, common, and large
      iPhone simulator profiles from the newest available iOS runtime;
    - launches the application, waits for the first frame, captures a screenshot,
      verifies that the app container exists, and terminates cleanly; and
    - uploads the three screenshots for inspection of the root view, navigation
-     shell, primary controls, blank-state failures, and obvious clipping.
+     shell, primary controls, blank-state failures, and obvious clipping;
+   - bounds every `simctl` subprocess to 180 seconds so a runner device-service
+     failure cannot consume the whole job indefinitely.
 6. **Static repository validation**
    - runs `git diff --check` and checks the committed patch for whitespace
      errors;
@@ -60,7 +69,7 @@ The job runs these gates against one checked-out commit:
      exposes broken project or target references before tests.
 
 The job summary reports each gate independently, along with the test simulator,
-runtime, and launch-smoke profiles.
+runtime, launch-smoke profiles, and exact revision.
 
 ## Artifacts and evidence
 
@@ -70,9 +79,9 @@ Failed runs upload logs, available result bundles, and any screenshots for seven
 days under `macos-validation-failure-<run>-<attempt>`.
 
 The logs include toolchain versions, device inventory, static checks, package
-tests, application tests, Debug and Release builds, package resolution, and
-launch commands. An `.xcresult` bundle is retained on failure when Xcode
-produced one.
+tests, application tests, the structured `.xcresult` summary, Debug and Release
+builds, package resolution, and launch commands. An `.xcresult` bundle is
+retained on failure when Xcode produced one.
 
 ## Interpreting failures
 
