@@ -469,7 +469,8 @@ private final class Planner {
                         id: missionID,
                         title: block.title,
                         durationMinutes: block.durationMinutes,
-                        nutritionPlanningNeedID: need.id
+                        nutritionPlanningNeedID:
+                            activeNutritionNeedID(for: need)
                     )
                 )
             }
@@ -524,7 +525,8 @@ private final class Planner {
                     id: identifiers.identifier(namespace: namespace),
                     title: "Substantial meal",
                     durationMinutes: need.suggestedMealDurationMinutes,
-                    nutritionPlanningNeedID: need.id
+                    nutritionPlanningNeedID:
+                        activeNutritionNeedID(for: need)
                 )
                 let block = ScheduleBlock(
                     id: identifiers.identifier(namespace: "\(namespace).block"),
@@ -580,7 +582,7 @@ private final class Planner {
                 durationMinutes: plannedMeal.estimatedDurationMinutes,
                 plannedMealID: plannedMeal.id,
                 mealTemplateID: plannedMeal.mealTemplateID,
-                nutritionPlanningNeedID: need.id
+                nutritionPlanningNeedID: activeNutritionNeedID(for: need)
             )
             guard !input.completionHistory.contains(where: {
                 $0.missionID == missionID
@@ -661,7 +663,7 @@ private final class Planner {
             title: title,
             durationMinutes: need.suggestedMealDurationMinutes,
             mealTemplateID: need.suggestedMealTemplateID,
-            nutritionPlanningNeedID: need.id
+            nutritionPlanningNeedID: activeNutritionNeedID(for: need)
         )
         guard !input.completionHistory.contains(where: {
             $0.missionID == missionID
@@ -2181,6 +2183,14 @@ private final class Planner {
                 : routine.recurrence.weekdays
             return weekdays.contains(workoutWeekday)
         }
+    }
+
+    private func activeNutritionNeedID(
+        for need: NutritionPlanningNeed
+    ) -> EntityID? {
+        input.nutritionNeeds.contains(where: { $0.id == need.id })
+            ? need.id
+            : nil
     }
 
     private func isHeavyLowerBody(_ mission: Mission) -> Bool {

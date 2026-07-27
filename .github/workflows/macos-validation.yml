@@ -339,6 +339,20 @@ jobs:
             test 2>&1 \
             | tee Logs/ios-simulator-tests.log
 
+      - name: Publish simulator test diagnostics
+        if: ${{ always() && steps.simulator_tests.outcome != 'skipped' }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          result_bundle="TestResults/PersonalMissionControlTests.xcresult"
+          if [[ -d "$result_bundle" ]]; then
+            xcrun xcresulttool get test-results summary \
+              --path "$result_bundle" \
+              --compact \
+              | tee Logs/ios-simulator-test-summary.json \
+              || true
+          fi
+
       - name: Gate 3 — Unsigned Debug simulator build
         id: debug_build
         if: ${{ always() && steps.simulator.outcome == 'success' }}
