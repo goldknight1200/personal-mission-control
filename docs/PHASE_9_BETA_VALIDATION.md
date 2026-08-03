@@ -155,9 +155,30 @@ non-overlapping blocks, approved workout session identity, food-deficit
 coverage, applied replan requests, pain-restriction explanations, exact changed
 shift times, and non-empty decision explanations.
 
-## Requires macOS/Xcode and simulator
+## macOS/Xcode and simulator evidence
 
-Run on the latest installed stable Xcode:
+GitHub Actions run
+[`30343457516`](https://github.com/goldknight1200/personal-mission-control/actions/runs/30343457516)
+completed successfully for validation revision
+`4efab53684c3965ba50252ba991908363e9bf9b5`, which contains implementation
+revision `68e00784c7cee37ff5509da1fcc02647701560e6` unchanged. The run used Xcode
+16.4 and Swift 6.1.2 and recorded:
+
+- static repository validation: passed;
+- core package tests: 151 passed, zero failed or skipped;
+- application/simulator tests: 22 passed, zero failed or skipped;
+- unsigned Debug and Release simulator builds: passed;
+- bounded launch smoke on iPhone SE (3rd generation), iPhone 17 Pro, and
+  iPhone 17 Pro Max: passed; and
+- artifact `launch-smoke-30343457516-1`: uploaded successfully.
+
+The three Home screenshots were visually inspected on 2026-08-03. All three
+profiles reached a coherent, usable Home surface without a crash or an obvious
+launch-layout failure. This is a representative launch check only; it does not
+close the comprehensive simulator inspection matrix below.
+
+The workflow executed the following equivalent commands on its selected
+simulator:
 
 ```sh
 swift test --package-path Packages/MissionControlCore
@@ -234,8 +255,8 @@ Still required before any production-readiness statement:
 
 | Category | Status |
 | --- | --- |
-| Implemented and unit-tested | Revision `68e00784c7cee37ff5509da1fcc02647701560e6` passed all 151 core tests and all 22 application tests in the macOS/Xcode workflow; no authored skip/disabled marker was found |
-| Compiled/tested in Xcode or simulator | Static validation, the complete simulator test action, and the unsigned Debug build passed; the launch-smoke, unsigned Release, artifact, and final workflow conclusions still require an authenticated run read |
+| Implemented and unit-tested | Implementation revision `68e00784c7cee37ff5509da1fcc02647701560e6`, unchanged in validation revision `4efab53684c3965ba50252ba991908363e9bf9b5`, passed all 151 core tests and all 22 application tests; no authored skip/disabled marker was found |
+| Compiled/tested in Xcode or simulator | Run `30343457516` passed static validation, the complete simulator test action, unsigned Debug and Release builds, and the three-profile launch smoke; the retained screenshots were visually inspected for launch coherence |
 | Validated on a real device | Not validated |
 | Requires user account/permission configuration | AI endpoint/model/credential; Calendar, Health, Speech, Notifications, Siri, photo/file selections as used |
 | Known limitations | English-only UI; custom JSON endpoint rather than a bundled provider-specific account flow; no background OCR/feed refresh; no automatic cloud sync; external exported calendar items are not deleted by local reset; real-device performance thresholds remain unset |

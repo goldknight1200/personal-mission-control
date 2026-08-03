@@ -12,10 +12,12 @@ checkbox below as passed.
 | Field | Value |
 | --- | --- |
 | Implementation revision | `68e00784c7cee37ff5509da1fcc02647701560e6` |
-| Workflow run | `30227671433` |
-| Confirmed green before authenticated access stopped | Static validation; 151/151 core tests; 22/22 application tests; unsigned Debug build |
+| Validation revision | `4efab53684c3965ba50252ba991908363e9bf9b5` (implementation unchanged; documentation handoff included) |
+| Workflow run | [`30343457516`](https://github.com/goldknight1200/personal-mission-control/actions/runs/30343457516) |
+| Confirmed automated gates | Static validation; 151/151 core tests; 22/22 application tests; unsigned Debug and Release builds; three-profile launch smoke; successful workflow conclusion |
 | Authored skip-marker audit | 0 skip/disabled markers across 173 authored tests |
-| Still requiring an authenticated run conclusion | Three-profile launch smoke; unsigned Release build; artifacts; overall workflow conclusion |
+| Launch artifact | `launch-smoke-30343457516-1`; Home screenshots visually inspected on 2026-08-03 for launch coherence |
+| Still requiring configuration/manual validation | Signed device, accounts and permissions, full accessibility/usability matrix, device performance, archive/TestFlight, and beta operations |
 | Physical evidence | None recorded; every physical checklist item remains open |
 
 Do not begin the physical run until all entry gates pass on the exact final
@@ -55,11 +57,11 @@ Defect ID / notes:
 
 ## Entry gates
 
-- [ ] `swift test --package-path Packages/MissionControlCore` passed.
-- [ ] iOS simulator XCTest passed on the candidate commit.
-- [ ] unsigned Debug simulator build passed.
-- [ ] unsigned Release simulator build passed.
-- [ ] app launched on small, common, and large supported iPhone simulators.
+- [x] `swift test --package-path Packages/MissionControlCore` passed.
+- [x] iOS simulator XCTest passed on the validation commit.
+- [x] unsigned Debug simulator build passed.
+- [x] unsigned Release simulator build passed.
+- [x] app launched on small, common, and large supported iPhone simulators.
 - [ ] candidate commit and build number are recorded above.
 - [ ] the device is backed up and contains only test data/accounts suitable for
       the permission and deletion scenarios.

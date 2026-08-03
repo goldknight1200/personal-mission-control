@@ -2,20 +2,21 @@
 
 Each phase begins with an audit of the prior acceptance criteria. Later phases extend stable boundaries rather than rewriting them without an explicit migration reason.
 
-Stabilization evidence as of 2026-07-27: revision
-`68e00784c7cee37ff5509da1fcc02647701560e6` passed static validation, all 151
-core tests, all 22 application/simulator tests, and the unsigned Debug build in
-the authoritative macOS/Xcode workflow. The final launch-smoke and unsigned
-Release conclusions could not be re-read after the authenticated GitHub account
-reached its usage limit, so they remain open rather than inferred. No
+Stabilization evidence refreshed 2026-08-03: validation revision
+`4efab53684c3965ba50252ba991908363e9bf9b5` contains implementation revision
+`68e00784c7cee37ff5509da1fcc02647701560e6` unchanged and passed static
+validation, all 151 core tests, all 22 application/simulator tests, unsigned
+Debug and Release builds, and bounded launch smoke on three representative
+iPhone simulator profiles in the authoritative macOS/Xcode workflow. The
+retained Home screenshots were visually inspected for launch coherence. No
 physical-device checklist item is implied by this automated evidence.
 
 ## Phase 1 — Local vertical slice
 
 Audited completion status as of 2026-07-26: **Complete with risks**.
-The implementation passed the recorded core, complete simulator-test, and
-unsigned Debug gates; launch-smoke confirmation and physical-device validation
-remain pending.
+The implementation passed the recorded core, complete simulator-test, unsigned
+Debug/Release, and representative launch-smoke gates; physical-device
+validation remains pending.
 
 Implement the core domain model, SwiftData adapter, app navigation, editable seed profile, structured sample inputs, and minimal execution-focused Home experience.
 
@@ -34,7 +35,7 @@ Acceptance criteria:
 Audited completion status as of 2026-07-26: **Complete with risks**.
 The intended source is present; recovered planner/replanning corrections,
 including unique project occurrence allocation, passed the recorded automated
-tests. Launch-smoke confirmation and physical-device validation remain pending.
+tests. Physical-device end-to-end validation remains pending.
 
 Implement the seven-day staged planner, detailed current-day timeline, explainable decisions, conflict reporting, and minimal-change replanning.
 
@@ -50,8 +51,8 @@ Acceptance criteria:
 ## Phase 3 — Voice review and command pipeline
 
 Audited completion status as of 2026-07-26: **Complete with risks**.
-The intended source passed the recorded automated gates; simulator microphone,
-live Speech, launch-smoke confirmation, and physical-device validation remain
+The intended source passed the recorded automated and launch-smoke gates;
+simulator microphone, live Speech, and physical-device validation remain
 pending.
 Schedule-affecting commands feed confirmed typed requests to the deterministic
 Phase 2 replanner.
@@ -71,8 +72,8 @@ Acceptance criteria:
 
 Audited completion status as of 2026-07-26: **Complete with risks**.
 The intended source and notification adapter corrections passed the recorded
-automated gates; launch-smoke confirmation, notification-action, and
-physical-device validation remain pending.
+automated and launch-smoke gates; notification-action and physical-device
+validation remain pending.
 Recovery operations use the deterministic Phase 2 replanner after explicit
 decisions.
 
@@ -90,9 +91,8 @@ Acceptance criteria:
 ## Phase 5 — Goals, projects, lists, routines, shopping, and shifts
 
 Audited completion status as of 2026-07-26: **Complete with risks**.
-The intended source passed the recorded automated gates; launch-smoke
-confirmation, full management/voice UI journeys, and physical-device
-validation remain pending.
+The intended source passed the recorded automated and launch-smoke gates; full
+management/voice UI journeys and physical-device validation remain pending.
 
 Build complete management flows for structured work and recurring responsibilities.
 
@@ -108,9 +108,8 @@ Acceptance criteria:
 ## Phase 6 — Nutrition and food inventory
 
 Audited completion status as of 2026-07-26: **Complete with risks**.
-The intended source passed the recorded automated gates; launch-smoke
-confirmation, full management UI journeys, and physical-device validation
-remain pending.
+The intended source passed the recorded automated and launch-smoke gates; full
+management UI journeys and physical-device validation remain pending.
 
 Implement nutrition targets, meal templates/plans, low-friction inventory, shortage prediction, and meal/shopping scheduling.
 
@@ -126,8 +125,8 @@ Acceptance criteria:
 
 Audited completion status as of 2026-07-26: **Complete with risks**.
 The intended source and occurrence-recovery corrections passed the recorded
-automated gates; launch-smoke confirmation, rest-timer interaction, and
-physical-device validation remain pending.
+automated and launch-smoke gates; rest-timer interaction and physical-device
+validation remain pending.
 
 Implement user-approved programs, session execution, set/rest state, logs, and recovery-aware scheduling.
 
@@ -143,8 +142,9 @@ Acceptance criteria:
 
 Audited completion status as of 2026-07-26: **Partial**.
 Concrete adapters compiled and their core/application tests passed in the
-recorded automated gates. Launch-smoke confirmation, signed-device entitlement,
-Siri, Calendar, and Health validation remain pending.
+recorded automated gates. Signed-device entitlement, Siri, Calendar, and Health
+validation remain pending; the generic Home launch smoke does not exercise
+those integrations.
 
 Add permission-aware Calendar, Health sleep, Siri/App Intents, App Shortcuts, and iCal adapters.
 
@@ -161,8 +161,8 @@ Acceptance criteria:
 
 Audited completion status as of 2026-07-26: **Partial**.
 Substantial optional AI/OCR and hardening source compiled and passed the
-recorded core/application test and unsigned Debug gates. Launch-smoke and
-unsigned Release conclusions, signed-device, configured-provider,
+recorded core/application tests, unsigned Debug/Release builds, and
+three-profile launch smoke. Signed-device, configured-provider, comprehensive
 accessibility, supported-device performance, TestFlight, and full beta
 validation remain pending. Production readiness is not claimed.
 

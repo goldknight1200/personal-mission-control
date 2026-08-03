@@ -1,6 +1,6 @@
 # Phase 1–9 Stabilization Report
 
-Report date: 2026-07-27
+Report date: 2026-08-03
 
 Stabilization branch: `stabilize/phase-1-to-9`
 
@@ -8,23 +8,30 @@ Preserved baseline: `ad36eee7e69d084cfbfd067dee5d72abf348aa30`
 
 Baseline tag: `v0.9-pre-verification`
 
-Implementation revision under final validation:
+Implementation revision:
 `68e00784c7cee37ff5509da1fcc02647701560e6`
 
+Validation revision containing that implementation unchanged:
+`4efab53684c3965ba50252ba991908363e9bf9b5`
+
 GitHub Actions run:
-[`30227671433`](https://github.com/goldknight1200/personal-mission-control/actions/runs/30227671433)
+[`30343457516`](https://github.com/goldknight1200/personal-mission-control/actions/runs/30343457516)
 
 Phase 10 work performed: **none**
 
 ## 1. Executive summary
 
 The previously uncompiled Phase 1–9 stabilization work has now compiled and
-executed on macOS/Xcode. On implementation revision `68e0078`, static
-validation passed, all 151 core tests passed, all 22 application tests passed,
-and the unsigned Debug simulator build passed. The workflow then entered its
-three-profile launch smoke. The final launch, unsigned Release, artifact, and
-overall conclusions still require an authenticated read after GitHub access
-became unavailable during the running job.
+executed on macOS/Xcode. Validation revision `4efab53`, containing
+implementation revision `68e0078` unchanged, passed static validation, all 151
+core tests, all 22 application tests, unsigned Debug and Release simulator
+builds, and bounded launch smoke on three representative iPhone profiles. The
+workflow concluded successfully and uploaded its launch screenshots.
+
+The retained iPhone SE (3rd generation), iPhone 17 Pro, and iPhone 17 Pro Max
+Home screenshots were visually inspected on 2026-08-03 and were coherent at
+launch. This does not substitute for the comprehensive accessibility,
+configured-integration, or signed-device validation that remains open.
 
 CI-driven stabilization found and corrected real integration defects rather
 than weakening tests:
@@ -83,6 +90,7 @@ documents.
 | `e95a064` | Prevent generated missions from referencing non-persisted synthetic nutrition needs; publish structured Xcode test diagnostics. |
 | `a01b75f` | Retain source missions for historical blocks and stop resolved nutrition/project occurrences from reusing the same identity. |
 | `68e0078` | Allocate collision-free, stable project occurrence sequences across repeated replans. |
+| `4efab53` | Record the Phase 1–9 stabilization handoff; the full macOS workflow subsequently passed on this exact revision. |
 
 The full baseline-to-implementation patch changes 33 files, with 3,715
 insertions and 158 deletions.
@@ -103,8 +111,10 @@ The 33-file implementation revision consists of:
 
 The documentation handoff adds this report and its standalone summary and
 updates the CI guide, roadmap, Phase 9 matrix, and physical-device checklist.
-Those documentation/workflow changes are intentionally not described as
-validated until they are committed, pushed, and run on their own exact SHA.
+Those documentation/workflow changes were committed, pushed, and validated on
+their exact `4efab53` SHA. This later evidence-refresh edit is documentation
+only and should receive the same workflow after it becomes an immutable
+candidate commit.
 
 ## 4. Architecture verification
 
@@ -213,7 +223,10 @@ xcodebuild \
 - Total: **173** XCTest methods.
 - Explicit skipped/disabled test API markers: **0**.
 
-### Revision `68e00784c7cee37ff5509da1fcc02647701560e6`
+### Validation revision `4efab53684c3965ba50252ba991908363e9bf9b5`
+
+This revision contains implementation revision
+`68e00784c7cee37ff5509da1fcc02647701560e6` unchanged.
 
 | Gate | Result |
 | --- | --- |
@@ -222,14 +235,15 @@ xcodebuild \
 | Application tests | **22 passed / 22 executed / 0 failed / 0 skipped** |
 | Test simulator | **iPhone 17 Pro Max, iOS Simulator 26.2** |
 | Unsigned Debug build | **Passed** |
-| Three-profile launch smoke | **Final conclusion pending authenticated run read** |
-| Unsigned Release build | **Final conclusion pending authenticated run read** |
-| Workflow conclusion | **Pending authenticated run read** |
+| Three-profile launch smoke | **Passed** on iPhone SE (3rd generation), iPhone 17 Pro, and iPhone 17 Pro Max |
+| Unsigned Release build | **Passed** |
+| Launch artifact | **Uploaded** as `launch-smoke-30343457516-1`; visually inspected 2026-08-03 |
+| Workflow conclusion | **Success** |
 
-The app test `.xcresult` summary on the immediately preceding diagnostic run
-proved that all 22 tests were discovered; the final implementation run then
-reported Gate 2 success. The implementation run's launch/Release result must
-not be inferred from an in-progress snapshot.
+The structured app-test `.xcresult` summary reported 22 passed tests, zero
+failed, and zero skipped. The run record reports every gate and the overall job
+as successful; the launch artifact remains separate from the full manual UI
+and accessibility matrix.
 
 ## 8. Material CI failures and resolutions
 
@@ -294,8 +308,10 @@ The core run passed correctness plus guardrails for:
 - deterministic profiling of 10,000 completion records.
 
 The tests assert identifier uniqueness and non-overlap, and use broad
-catastrophic-regression bounds rather than product performance targets. Exact
-seconds from the final run still require authenticated log extraction.
+catastrophic-regression bounds rather than product performance targets. The
+recorded core run measured approximately 13.60 seconds for the 200-item backlog
+and 53.41 seconds for the 500-item backlog on the hosted runner. These are CI
+observations, not approved supported-device thresholds.
 
 Phase 9 supported-device approval remains open because no product threshold,
 device matrix, Instruments run, peak-memory result, energy result, battery
@@ -319,7 +335,7 @@ Classification:
 | Protocol-backed adapters with denied/unavailable fallbacks | 8 | Calendar, Health, iCal, intents, notifications, and unavailable providers are wired behind core ports. | Static layering and Phase 8 core tests passed; app compiles. | Runtime denial/history on supported devices. | 4 | High | Yes | Execute signed permission matrix and record screenshots/logs. |
 | Calendar exact/immutable import and owned-only export | 8 | EventKit adapter and reconciliation metadata exist. | Denial, update, deletion, owned identity, and write-only export tests passed. | Real timed/all-day events from two calendars; `EKEventStoreChanged`; unavailable destination. | 4 | High | Yes | Run the Calendar section of the device checklist with a signed build. |
 | Health minimum derived sleep context; raw samples remain local | 8 | Read-only Sleep Analysis adapter derives bounded recovery context. | Optional/no-data/stale-derived-context tests passed; payload/backup exclusion tests passed. | Provisioned HealthKit entitlement, allow/deny/limited/empty/real sample behavior. | 4, 5 | High | Yes | Provision HealthKit and execute the real-device Health matrix. |
-| App Intents use safe paths and consequence rules | 8 | Six intents call `AppModel`; capture opens reviewed UI; no intent supplies arbitrary planner output. | App metadata compiles in Debug; static path review passed. | Automated intent invocation, Shortcuts discovery, foreground/background, and Siri voice evidence. | 2, 3, 4 | High | Yes | Add/execute intent integration checks where feasible, then run all six on device. |
+| App Intents use safe paths and consequence rules | 8 | Six intents call `AppModel`; capture opens reviewed UI; no intent supplies arbitrary planner output. | App metadata compiles in Debug and Release; static path review passed. | Automated intent invocation, Shortcuts discovery, foreground/background, and Siri voice evidence. | 2, 3, 4 | High | Yes | Add/execute intent integration checks where feasible, then run all six on device. |
 | iCal update/cancel/removal reconciliation | 8 | HTTPS/webcal adapter and core reconciler exist. | Parser, update, cancellation, deletion, and truncation tests passed. | Live HTTPS/webcal feed, offline/timeout/server behavior in app UI. | 3, 4 | Medium | Yes | Run representative feed and failure matrix without deleting prior good fixtures. |
 | Entitlements, purpose strings, and limitations documented | 8 | HealthKit entitlement, iOS 17 target, Calendar/Health/Speech/microphone purpose strings, and validation guide exist. | Static/Xcode project validation passed. | Signed archive capability and actual prompt text review. | 5 | High | Yes | Validate development/distribution archive and compare runtime prompts. |
 | AI remains optional and has no direct write authority | 9 | Configurable HTTPS provider produces locally validated typed proposals; deterministic path is independent. | Context, configuration, strict decoding, fallback, confirmation, and stale-occurrence tests passed. | Configured live endpoint/account and simulator/device failure matrix. | 3, 4 | High | Yes | Exercise a controlled provider with payload inspection, reject, confirm, timeout, offline, 4xx/5xx, and oversized output. |
@@ -328,10 +344,10 @@ Classification:
 | Manual text/voice shifts remain available when OCR fails | 9 | Manual batch parser and voice/text route remain independent of Vision. | Parser/command tests and app compilation passed. | PhotosPicker/file importer failure/cancel journey plus live Speech fallback. | 3, 4 | Medium | Yes | Execute clear/poor/cancel/unreadable image cases and confirm manual entry remains usable. |
 | Privacy review across permissions, retention, deletion, export, logs, integrations, and provider | 9 | In-app privacy controls, backup disclosure, local deletion, minimized provider, and logging scan exist. | Backup, deletion, payload, and static logging tests/checks passed. | Final privacy nutrition labels, policy/support URLs, actual provider disclosure, prompt review, notification preview review. | 4, 5, 7 | Release blocker | Yes | Approve policy boundaries, publish accurate URLs/metadata, and review on-device disclosures. |
 | Migration and failure paths on supported devices | 9 | Schema migration, corruption rejection, backup/restore, offline deterministic fallback, and visible session-only storage mode exist. | Core/SwiftData/app failure suites passed. | Installed upgrade, force-close/relaunch, device restart, reinstall/restore, storage failure rehearsal. | 4 | High | Yes | Run upgrade/recovery checklist with retained pre-upgrade artifacts. |
-| Accessibility and usability | 9 | Scaled metrics, labels/text cues, semantic colors, Reduce Motion hooks, scrollable layouts, and explicit confirmations exist. | Static audit only; root launch screenshot gate is separate. | Full Dynamic Type, VoiceOver, contrast, motion, orientation, text expansion, keyboard, and modal focus matrix. | 6 | Release blocker | Yes | Complete the accessibility checklist and log every release-blocking defect. |
+| Accessibility and usability | 9 | Scaled metrics, labels/text cues, semantic colors, Reduce Motion hooks, scrollable layouts, and explicit confirmations exist. | Static audit plus representative small/common/large Home launch screenshots passed. | Full Dynamic Type, VoiceOver, contrast, motion, orientation, text expansion, keyboard, and modal focus matrix. | 6 | Release blocker | Yes | Complete the accessibility checklist and log every release-blocking defect. |
 | Localization and time-zone behavior | 9 | Europe/Berlin/DST logic and fixed/follow-system settings exist; UI is English-only. | DST exactness and time-zone replanning tests passed. | Device travel/clock checks and approved release locales. | 4, 7 | High | Yes | Decide beta locales; run fixed/follow-system DST/time-zone matrix. |
 | Supported-device performance and stability | 9 | Bounded performance/correctness smoke tests exist. | Typical-week, 200/500 backlog, round-trip, and large-history tests passed. | Device matrix, product thresholds, Instruments, memory, energy, battery, thermal, and soak evidence. | 4, 7 | Release blocker | Yes | Approve thresholds/device floor and execute the checklist datasets and soak. |
-| Signing, archive, and HealthKit provisioning | 9 | Automatic signing config and HealthKit entitlement are checked in. | Unsigned simulator compilation is green through Debug; final Release read pending. | Team/profile, distribution certificate, signed archive, capability validation. | 5 | Release blocker | Yes | Select intended team/bundle ownership and validate a distribution archive. |
+| Signing, archive, and HealthKit provisioning | 9 | Automatic signing config and HealthKit entitlement are checked in. | Unsigned Debug and Release simulator compilation is green. | Team/profile, distribution certificate, signed archive, capability validation. | 5 | Release blocker | Yes | Select intended team/bundle ownership and validate a distribution archive. |
 | TestFlight metadata and beta operations | 9 | Required fields/processes are listed in validation docs. | Documentation inventory only. | Description, tester instructions, feedback address, privacy/support URLs, export answers, crash process, provider setup, backup/deletion support rehearsal, beta sign-off. | 5, 7 | Release blocker | Yes | Supply owners/URLs/accounts, complete App Store Connect metadata, and run a controlled beta. |
 | Background OCR/feed refresh, cloud sync, bundled provider account flow | Future | Deliberately absent and disclosed. | N/A | Not required by Phase 8/9 acceptance. | 8 | None | No | Retain as future-scope decisions; do not add during stabilization. |
 
@@ -389,19 +405,16 @@ No unchecked physical-device item is claimed as passed.
 
 ## 17. Merge and Phase 10 recommendation
 
-The implementation revision has green static, core, app, and Debug evidence.
-However, the branch is not eligible to merge under the approved release gates
-until:
+The implementation and validation revisions have green static, core, app,
+Debug, Release, and representative launch-smoke evidence. However, the branch
+is not eligible to merge under the approved release gates until:
 
-1. the already-running workflow's launch, Release, artifact, and overall
-   conclusions are read and recorded;
-2. launch screenshots are visually inspected;
-3. signed Phase 8 integrations pass;
-4. Phase 9 accessibility, device performance, privacy, archive/TestFlight, and
+1. signed Phase 8 integrations pass;
+2. Phase 9 accessibility, device performance, privacy, archive/TestFlight, and
    beta operations pass or are explicitly accepted as non-blocking by the
    product owner; and
-5. the final documentation-only revision receives its own applicable
-   validation.
+3. the final immutable candidate, including this evidence refresh, receives
+   its own applicable validation.
 
 Current merge recommendation: **NOT READY TO MERGE**.
 

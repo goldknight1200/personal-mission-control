@@ -24,7 +24,12 @@ service scheduling or storage authority.
 - Provisional minimum deployment target: iOS 17.0, chosen to keep the Phase 1 SwiftData adapter straightforward.
 - Package manifest: Swift tools 5.9 syntax for broad Xcode 15+ compatibility.
 - Dependency policy: Apple frameworks and the Swift standard library first; no third-party dependency or backend. SwiftData is used only by the Phase 1 app adapter.
-- Toolchain note: the current Windows environment has neither Swift nor Xcode. The project must be compiled on a macOS host with a supported stable Xcode before the target or language mode is treated as validated.
+- Toolchain note: the current Windows environment has neither Swift nor Xcode.
+  GitHub Actions validation revision
+  `4efab53684c3965ba50252ba991908363e9bf9b5` compiled and tested the project
+  with Xcode 16.4 and Swift 6.1.2, including unsigned Debug/Release builds and
+  simulator launch smoke. Subsequent source changes still require a macOS/Xcode
+  run before their target or language mode is treated as validated.
 
 The deployment target is a documented decision, not a permanent constraint. Lowering it requires selecting a different persistence adapter or adding availability fallbacks before changing the target.
 

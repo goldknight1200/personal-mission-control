@@ -43,9 +43,13 @@ Phases 1 through 9 are implemented in source:
 - XCTest coverage for planning/replanning constraints, command fixtures, mutation application, confirmation gates, notification recalculation, lateness boundaries, execution history, weekly aggregation, capture state, persistence failures, core models, and the SwiftData adapter.
 
 No account, AI provider, or app-owned raw-audio file is required. Phase 9 is
-implemented in source but is not a production-readiness claim: macOS/Xcode,
-simulator, signed-device, configured-provider, accessibility, performance, and
-full beta validation remain documented gates.
+implemented in source, and validation revision
+`4efab53684c3965ba50252ba991908363e9bf9b5` passed the recorded macOS/Xcode
+core tests, complete simulator tests, unsigned Debug/Release builds, and
+three-profile launch smoke. This is not a production-readiness claim:
+signed-device, configured-provider, comprehensive accessibility,
+supported-device performance, archive/TestFlight, and full beta validation
+remain open.
 
 ## Requirements
 
