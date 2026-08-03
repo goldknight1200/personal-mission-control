@@ -12,31 +12,33 @@ checkbox below as passed.
 | Field | Value |
 | --- | --- |
 | Implementation revision | `68e00784c7cee37ff5509da1fcc02647701560e6` |
-| Validation revision | `4efab53684c3965ba50252ba991908363e9bf9b5` (implementation unchanged; documentation handoff included) |
-| Workflow run | [`30343457516`](https://github.com/goldknight1200/personal-mission-control/actions/runs/30343457516) |
+| Validation revision | `0fddfba2c84c3cfbfbb04bde6e38adf2f2e2078e` (implementation unchanged; exact documentation handoff included) |
+| Workflow run | [`30806247855`](https://github.com/goldknight1200/personal-mission-control/actions/runs/30806247855) |
 | Confirmed automated gates | Static validation; 151/151 core tests; 22/22 application tests; unsigned Debug and Release builds; three-profile launch smoke; successful workflow conclusion |
 | Authored skip-marker audit | 0 skip/disabled markers across 173 authored tests |
-| Launch artifact | `launch-smoke-30343457516-1`; Home screenshots visually inspected on 2026-08-03 for launch coherence |
+| Automated toolchain | macOS 15.7.7 (arm64); Xcode 16.4; Swift 6.1.2; iOS Simulator 26.2 |
+| Launch artifact | `launch-smoke-30806247855-1`; Home screenshots visually inspected on 2026-08-03 for launch coherence |
 | Still requiring configuration/manual validation | Signed device, accounts and permissions, full accessibility/usability matrix, device performance, archive/TestFlight, and beta operations |
 | Physical evidence | None recorded; every physical checklist item remains open |
 
 Do not begin the physical run until all entry gates pass on the exact final
-candidate commit. If the final candidate differs from the implementation
-revision above, replace this handoff with evidence for that candidate.
+candidate commit. If production source changes from the implementation
+revision above or the candidate commit changes, replace this handoff with
+evidence for the new candidate.
 
 ## Test record
 
 | Field | Value |
 | --- | --- |
-| Candidate commit | |
-| Git status clean | ☐ Yes ☐ No |
-| App version/build | |
-| Xcode version | |
-| macOS version/architecture | |
+| Candidate commit | `0fddfba2c84c3cfbfbb04bde6e38adf2f2e2078e` |
+| Git status clean before this checklist update | ☒ Yes ☐ No |
+| App version/build | 0.1 (1) |
+| Xcode version | 16.4 automated prerequisite; record the physical-build host below |
+| macOS version/architecture | 15.7.7 arm64 automated prerequisite; record the physical-build host below |
 | Device model | |
 | iOS version | |
-| Signing team | |
-| Bundle identifier | |
+| Signing team | Not configured in source; required before signed-device installation |
+| Bundle identifier | `com.ethanshahzad.PersonalMissionControl` |
 | HealthKit capability provisioned | ☐ Yes ☐ No ☐ Not tested |
 | Locale/language | |
 | Region | |
@@ -44,7 +46,7 @@ revision above, replace this handoff with evidence for that candidate.
 | System time zone | |
 | Tester | |
 | Date/time | |
-| Evidence folder/link | |
+| Evidence folder/link | [macOS workflow `30806247855`](https://github.com/goldknight1200/personal-mission-control/actions/runs/30806247855) |
 
 For every item, mark one result and attach a screenshot, screen recording, log,
 or written observation where useful:
@@ -62,7 +64,7 @@ Defect ID / notes:
 - [x] unsigned Debug simulator build passed.
 - [x] unsigned Release simulator build passed.
 - [x] app launched on small, common, and large supported iPhone simulators.
-- [ ] candidate commit and build number are recorded above.
+- [x] candidate commit and build number are recorded above.
 - [ ] the device is backed up and contains only test data/accounts suitable for
       the permission and deletion scenarios.
 - [ ] HealthKit signing capability and all expected Info.plist purpose strings

@@ -524,6 +524,22 @@ jobs:
             build 2>&1 \
             | tee Logs/ios-release-build.log
 
+      - name: Gate 7 — Unsigned Release device-SDK build
+        id: device_build
+        if: ${{ always() && steps.release_build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project PersonalMissionControl.xcodeproj \
+            -scheme PersonalMissionControl \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath DerivedData-Device \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 \
+            | tee Logs/ios-device-build.log
+
       - name: Summarize validation gates
         if: ${{ always() }}
         shell: bash
@@ -541,6 +557,7 @@ jobs:
             echo "| Unsigned Debug build | ${{ steps.debug_build.outcome }} |"
             echo "| Debug representative-size launch smoke | ${{ steps.launch_smoke.outcome }} |"
             echo "| Unsigned Release build | ${{ steps.release_build.outcome }} |"
+            echo "| Unsigned Release device-SDK build | ${{ steps.device_build.outcome }} |"
             echo
             echo "Test simulator: ${{ steps.simulator.outputs.name }}"
             echo "Runtime: ${{ steps.simulator.outputs.runtime }}"

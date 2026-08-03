@@ -44,7 +44,13 @@ The job runs these gates against one checked-out commit:
 4. **Unsigned Release build**
    - builds the complete application for the generic iOS Simulator destination
      in Release configuration with `CODE_SIGNING_ALLOWED=NO`.
-5. **Representative launch smoke**
+5. **Unsigned Release device-SDK build**
+   - compiles the complete Release application for the generic physical-iOS
+     destination with `CODE_SIGNING_ALLOWED=NO`; and
+   - catches device architecture and `iphoneos` SDK compilation failures
+     without claiming signing, provisioning, installation, entitlement, or
+     real-device runtime validation.
+6. **Representative launch smoke**
    - starts only after the complete simulator test action and unsigned Debug
      build have succeeded;
    - installs the Debug application on three distinct small, common, and large
@@ -55,7 +61,7 @@ The job runs these gates against one checked-out commit:
      shell, primary controls, blank-state failures, and obvious clipping;
    - bounds every `simctl` subprocess to 180 seconds so a runner device-service
      failure cannot consume the whole job indefinitely.
-6. **Static repository validation**
+7. **Static repository validation**
    - runs `git diff --check` and checks the committed patch for whitespace
      errors;
    - rejects unresolved conflict markers, credential-shaped content, and
@@ -111,8 +117,9 @@ architecture. This repository does not provide a Windows Swift/Xcode toolchain,
 so Windows results are not build or XCTest evidence.
 
 GitHub Actions supplies the macOS/Xcode toolchain and validates the pure core
-package, complete simulator XCTest action, unsigned Debug and Release builds,
-dependency resolution, and representative simulator launches.
+package, complete simulator XCTest action, unsigned Debug and Release simulator
+builds, an unsigned Release device-SDK build, dependency resolution, and
+representative simulator launches.
 
 A green workflow does not prove real-device behavior. Installation and upgrade,
 signing entitlements, notification delivery and action buttons, microphone and
